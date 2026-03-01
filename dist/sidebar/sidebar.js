@@ -22,36 +22,59 @@ const TYPE_BRIEF = {
 const TYPE_ORDER = ["bug", "design", "copy", "question", "general"];
 
 // ─── State ─────────────────────────────────────────────────────
-let currentSelector  = null;
-let currentNoteId    = null;
-let notes            = [];
-let currentTabId     = null;
-let tabTitle         = "";
-let markupActive     = false;
-let isEditing        = false;
-let editPrevSelector = null;
-const undoStack      = [];
-const redoStack      = [];
-let toastTimeout     = null;
+let currentSelector     = null;
+let currentNoteId       = null;
+let notes               = [];
+let currentTabId        = null;
+let currentTabUrl       = "";
+let currentNoteUrl      = "";   // Bug 1: normalized URL used as storage key
+let tabTitle            = "";
+let sessionTitle        = "";
+let markupActive        = false;
+let isEditing           = false;
+let editPrevSelector    = null;
+let markupEverActivated = false;
+const undoStack         = [];
+const redoStack         = [];
+let toastTimeout        = null;
 
 // ─── DOM refs ──────────────────────────────────────────────────
-const toggleBtn       = document.getElementById("markup-toggle");
-const activationHint  = document.getElementById("activation-hint");
-const closeBtn        = document.getElementById("close-btn");
-const noteCountEl     = document.getElementById("note-count");
-const notesList       = document.getElementById("notes-list");
-const emptyState      = document.getElementById("empty-state");
-const selectorDisplay = document.getElementById("selector-display");
-const noteInput       = document.getElementById("note-input");
-const generateBtn     = document.getElementById("generate-brief");
-const saveBtn         = document.getElementById("save-note");
-const toastEl         = document.getElementById("toast");
-const typeButtons     = document.querySelectorAll(".type-btn");
-const briefPanel      = document.getElementById("brief-output");
-const briefContent    = document.getElementById("brief-content");
-const copyBriefBtn    = document.getElementById("copy-brief");
-const closeBriefBtn   = document.getElementById("close-brief");
-const formArea        = document.querySelector(".markup-form-area");
+const toggleBtn          = document.getElementById("markup-toggle");
+const activationHint     = document.getElementById("activation-hint");
+const closeBtn           = document.getElementById("close-btn");
+const noteCountEl        = document.getElementById("note-count");
+const notesList          = document.getElementById("notes-list");
+const emptyState         = document.getElementById("empty-state");
+const selectorDisplay    = document.getElementById("selector-display");
+const selectorRow        = document.querySelector(".selector-row");   // Bug 5
+const clearSelectorBtn   = document.getElementById("clear-selector");
+const noteInput          = document.getElementById("note-input");
+const generateBtn        = document.getElementById("generate-brief");
+const saveBtn            = document.getElementById("save-note");
+const toastEl            = document.getElementById("toast");
+const typeButtons        = document.querySelectorAll(".type-btn");
+const briefPanel         = document.getElementById("brief-output");
+const briefContent       = document.getElementById("brief-content");
+const copyBriefBtn       = document.getElementById("copy-brief");
+const downloadBriefBtn   = document.getElementById("download-brief");
+const closeBriefBtn      = document.getElementById("close-brief");
+const formArea           = document.querySelector(".markup-form-area");
+const clearAllBtn        = document.getElementById("clear-all");
+const clearConfirmEl     = document.getElementById("clear-confirm");
+const clearConfirmMsgEl  = document.getElementById("clear-confirm-msg");
+const clearConfirmYesBtn = document.getElementById("clear-confirm-yes");
+const clearConfirmNoBtn  = document.getElementById("clear-confirm-no");
+const sessionTitleInput  = document.getElementById("session-title");
+const sessionTitleWrap   = document.getElementById("session-title-wrap");
+
+// Bug 5: hide selector row at startup — only shown when Markup is ON
+selectorRow.hidden = true;
+
+// ─── URL normalization (Bug 1 + Bug 8) ─────────────────────────
+// Strip hash and trailing slash so notes follow the page, not the tab.
+function normalizeUrl(url) {
+  return url.split("#")[0].replace(/\/$/, "");
+}
 
 // ─── Toggle state ──────────────────────────────────────────────
 function setToggleState(active) {
@@ -62,14 +85,15 @@ function setToggleState(active) {
     toggleBtn.setAttribute("aria-pressed", "true");
     saveBtn.disabled = false;
     saveBtn.setAttribute("aria-disabled", "false");
+    selectorRow.hidden = false;
     if (!currentSelector) {
-      selectorDisplay.textContent = "No element selected";
+      selectorDisplay.textContent = "Hover to preview element";
     }
   } else {
     toggleBtn.textContent = "Markup OFF";
     toggleBtn.classList.remove("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "false");
-    resetForm();
+    deactivateReset(); // Bug 6: preserves noteInput
   }
   updateEmptyState();
 }
@@ -82,18 +106,32 @@ async function sendToggle() {
   const tab = tabs[0];
   if (!tab?.id) return;
 
-  // Detect restricted URL schemes where content scripts can't inject
   const url = tab.url || "";
-  if (
+
+  // Always clear any stale hint before evaluating the new page context.
+  activationHint.hidden = true;
+
+  console.log("Markup: sendToggle tabId=", tab.id, "url=", url);
+
+  // Bug 2: file:// is NOT restricted — it's a core Markup use case.
+  // The manifest already declares file_urls permission.
+  const isRestricted =
     url.startsWith("chrome://") ||
     url.startsWith("chrome-extension://") ||
     url.startsWith("about:") ||
-    url.startsWith("edge://")
-  ) {
+    url.startsWith("edge://");
+
+  if (isRestricted) {
     activationHint.textContent = "Markup can't run on this page.";
     activationHint.hidden = false;
     return;
   }
+
+  // Bug 2: include file:// as a normal injectable page
+  const isNormalPage =
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("file://");
 
   let ready = false;
   try {
@@ -102,17 +140,34 @@ async function sendToggle() {
       func: () => window.__markupReady === true,
     });
     ready = results?.[0]?.result === true;
-  } catch {
+    console.log("Markup: ping result=", ready);
+  } catch (err) {
+    console.log("Markup: ping failed:", err?.message);
     ready = false;
   }
 
-  if (!ready) {
-    activationHint.textContent = "Reload the page to activate Markup.";
-    activationHint.hidden = false;
+  if (!ready && isNormalPage) {
+    console.log("Markup: content script not ready, attempting direct injection");
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content/content.js"],
+      });
+      await new Promise((r) => setTimeout(r, 500));
+      chrome.tabs.sendMessage(tab.id, { type: "MARKUP_ACTIVATE" });
+    } catch (injErr) {
+      console.log("Markup: injection failed:", injErr?.message);
+      activationHint.textContent = "Try refreshing the page.";
+      activationHint.hidden = false;
+    }
     return;
   }
 
-  activationHint.hidden = true;
+  if (!ready) {
+    return;
+  }
+
+  markupEverActivated = true;
   const msgType = markupActive ? "MARKUP_DEACTIVATE" : "MARKUP_ACTIVATE";
   chrome.tabs.sendMessage(tab.id, { type: msgType });
 }
@@ -192,9 +247,19 @@ function resetTypePicker() {
   setTypePicker("general");
 }
 
-// ─── Storage ───────────────────────────────────────────────────
-function loadNotes(tabId) {
-  const key = `markup_notes_${tabId}`;
+// ─── Clear selector visibility ─────────────────────────────────
+function updateClearSelectorVisibility() {
+  clearSelectorBtn.hidden = !currentSelector;
+}
+
+// ─── Clear all visibility ──────────────────────────────────────
+function updateClearAllVisibility() {
+  clearAllBtn.hidden = notes.length === 0;
+}
+
+// ─── Storage — notes (Bug 1: keyed by normalizedUrl, not tabId) ─
+function loadNotes() {
+  const key = `markup_notes_${currentNoteUrl}`;
   return new Promise((resolve) => {
     chrome.storage.local.get(key, (data) => {
       resolve(data[key] || []);
@@ -203,11 +268,46 @@ function loadNotes(tabId) {
 }
 
 function persistNotes() {
-  if (!currentTabId) return Promise.resolve();
-  const key = `markup_notes_${currentTabId}`;
+  if (!currentNoteUrl) return Promise.resolve();
+  const key = `markup_notes_${currentNoteUrl}`;
   return new Promise((resolve) => {
     chrome.storage.local.set({ [key]: notes }, resolve);
   });
+}
+
+// ─── Storage — session title (Bug 8: keyed by normalizedUrl) ───
+function loadSessionTitle() {
+  const key = `markup_session_${currentNoteUrl}`;
+  return new Promise((resolve) => {
+    chrome.storage.local.get(key, (data) => {
+      resolve(key in data ? data[key] : null);
+    });
+  });
+}
+
+function persistSessionTitle(title) {
+  if (!currentNoteUrl) return;
+  const key = `markup_session_${currentNoteUrl}`;
+  chrome.storage.local.set({ [key]: title });
+}
+
+sessionTitleInput.addEventListener("input", () => {
+  sessionTitle = sessionTitleInput.value;
+  persistSessionTitle(sessionTitle);
+});
+
+// ─── Storage — backup (Bug 9) ──────────────────────────────────
+// Written before any destructive clear. Keeps the last 3 snapshots per URL.
+async function writeBackup() {
+  if (!currentNoteUrl || notes.length === 0) return;
+  const backupKey = `markup_backup_${currentNoteUrl}`;
+  const existing = await new Promise((resolve) =>
+    chrome.storage.local.get(backupKey, (data) => resolve(data[backupKey] || []))
+  );
+  const backup = { timestamp: Date.now(), notes: JSON.parse(JSON.stringify(notes)) };
+  const updated = [...existing, backup].slice(-3);
+  await new Promise((resolve) => chrome.storage.local.set({ [backupKey]: updated }, resolve));
+  console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
 }
 
 // ─── Render ────────────────────────────────────────────────────
@@ -221,6 +321,7 @@ function renderNotesList() {
   generateBtn.setAttribute("aria-disabled", count === 0 ? "true" : "false");
 
   updateEmptyState();
+  updateClearAllVisibility();
 
   notes.forEach((note) => {
     notesList.appendChild(createNoteCard(note));
@@ -233,9 +334,14 @@ function createNoteCard(note) {
   card.className = "note-card";
   card.dataset.noteId = note.id;
 
-  const locationChip = note.selector
-    ? `<code class="selector-chip">${escapeHtml(note.selector)}</code>`
-    : `<span class="general-note-label">General note</span>`;
+  // Bug 7: only show "General note" label for the General type with no selector.
+  // For Bug/Design/Copy/Question with no element, show nothing in that area.
+  let locationChip = "";
+  if (note.selector) {
+    locationChip = `<code class="selector-chip">${escapeHtml(note.selector)}</code>`;
+  } else if (note.type === "general") {
+    locationChip = `<span class="general-note-label">General note</span>`;
+  }
 
   card.innerHTML = `
     <div class="note-card__header">
@@ -308,10 +414,18 @@ async function flushSave() {
   const type = getActiveType();
 
   if (currentNoteId) {
+    // Bug 4: always update in place when currentNoteId is set — never insert new.
+    // Also update selector/elementName so a cleared element is reflected correctly.
     const idx = notes.findIndex((n) => n.id === currentNoteId);
     if (idx >= 0) {
       pushUndo("Edit undone");
-      notes[idx] = { ...notes[idx], type, text };
+      notes[idx] = {
+        ...notes[idx],
+        type,
+        text,
+        selector: currentSelector,
+        elementName: currentSelector ? null : "General note",
+      };
     }
   } else {
     const note = {
@@ -330,18 +444,38 @@ async function flushSave() {
   renderNotesList();
 }
 
-// ─── Form reset (full — used when Markup turns OFF) ────────────
+// ─── Form reset — full (used after explicit user action: save/cancel) ──
 function resetForm() {
   currentSelector  = null;
   currentNoteId    = null;
   isEditing        = false;
   editPrevSelector = null;
   noteInput.value  = "";
-  selectorDisplay.textContent = "Hover to preview element";
+  selectorRow.hidden = true;
+  selectorDisplay.textContent = "";
   saveBtn.textContent = "Save Note";
   saveBtn.disabled = true;
   saveBtn.setAttribute("aria-disabled", "true");
   resetTypePicker();
+  updateClearSelectorVisibility();
+}
+
+// ─── Deactivation reset (Bug 6) ────────────────────────────────
+// Like resetForm but preserves noteInput so in-progress text isn't lost
+// when Markup is toggled off or the content script disconnects.
+function deactivateReset() {
+  currentSelector  = null;
+  currentNoteId    = null;
+  isEditing        = false;
+  editPrevSelector = null;
+  // noteInput.value intentionally NOT cleared
+  selectorRow.hidden = true;
+  selectorDisplay.textContent = "";
+  saveBtn.textContent = "Save Note";
+  saveBtn.disabled = true;
+  saveBtn.setAttribute("aria-disabled", "true");
+  resetTypePicker();
+  updateClearSelectorVisibility();
 }
 
 // ─── Soft reset (keeps element active after save) ──────────────
@@ -360,10 +494,12 @@ function enterEditMode(note) {
   currentSelector  = note.selector;
   noteInput.value  = note.text;
   setTypePicker(note.type);
-  selectorDisplay.textContent = note.selector || "General note";
+  selectorRow.hidden = false;
+  selectorDisplay.textContent = note.selector || "Hover to preview element";
   saveBtn.textContent = "Update Note";
   saveBtn.disabled = false;
   saveBtn.setAttribute("aria-disabled", "false");
+  updateClearSelectorVisibility();
   noteInput.focus();
 }
 
@@ -375,11 +511,10 @@ function exitEditMode() {
   noteInput.value  = "";
   resetTypePicker();
   saveBtn.textContent = "Save Note";
-  selectorDisplay.textContent = currentSelector
-    ? currentSelector
-    : markupActive ? "No element selected" : "Hover to preview element";
+  selectorDisplay.textContent = currentSelector || "Hover to preview element";
   saveBtn.disabled = !markupActive;
   saveBtn.setAttribute("aria-disabled", !markupActive ? "true" : "false");
+  updateClearSelectorVisibility();
 }
 
 // ─── Delete note ───────────────────────────────────────────────
@@ -432,6 +567,49 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ─── Clear selector ────────────────────────────────────────────
+clearSelectorBtn.addEventListener("click", async () => {
+  const tabs = await new Promise((resolve) =>
+    chrome.tabs.query({ active: true, currentWindow: true }, resolve)
+  );
+  const tab = tabs[0];
+  if (tab?.id) {
+    chrome.tabs.sendMessage(tab.id, { type: "MARKUP_DESELECT" });
+  }
+  currentSelector = null;
+  // Bug 4: do NOT clear currentNoteId here.
+  // If in edit mode, currentNoteId must remain set so flushSave() updates in place
+  // rather than inserting a duplicate note.
+  selectorDisplay.textContent = "Hover to preview element";
+  updateClearSelectorVisibility();
+  if (!noteInput.value.trim()) {
+    saveBtn.disabled = !markupActive;
+    saveBtn.setAttribute("aria-disabled", !markupActive ? "true" : "false");
+  }
+});
+
+// ─── Clear all ─────────────────────────────────────────────────
+clearAllBtn.addEventListener("click", () => {
+  const n = notes.length;
+  clearConfirmMsgEl.textContent = `Delete all ${n} note${n === 1 ? "" : "s"}?`;
+  clearConfirmEl.hidden = false;
+  clearAllBtn.hidden = true;
+});
+
+clearConfirmYesBtn.addEventListener("click", async () => {
+  await writeBackup(); // Bug 9: persist a backup before destructive clear
+  pushUndo("Clear all undone");
+  notes = [];
+  await persistNotes();
+  clearConfirmEl.hidden = true;
+  renderNotesList();
+});
+
+clearConfirmNoBtn.addEventListener("click", () => {
+  clearConfirmEl.hidden = true;
+  updateClearAllVisibility();
+});
+
 // ─── Brief panel ───────────────────────────────────────────────
 function buildBriefText() {
   const now = new Date();
@@ -442,10 +620,13 @@ function buildBriefText() {
     hour: "numeric", minute: "2-digit",
   });
 
+  const project = sessionTitle || tabTitle || "Unknown";
+
   const lines = [
     `# Markup — Fix Instructions`,
     ``,
-    `**Project:** ${tabTitle || "Unknown"}`,
+    `**Project:** ${project}`,
+    `**URL:** ${currentTabUrl || "Unknown"}`,
     `**Reviewed:** ${dateStr} at ${timeStr}`,
     `**Mode:** Self Review`,
     `**Total Issues:** ${notes.length}`,
@@ -481,6 +662,8 @@ function buildBriefText() {
 function showBrief() {
   briefContent.textContent = buildBriefText();
   notesList.hidden = true;
+  sessionTitleWrap.hidden = true;
+  clearConfirmEl.hidden = true;
   formArea.hidden = true;
   briefPanel.hidden = false;
 }
@@ -488,6 +671,7 @@ function showBrief() {
 function hideBrief() {
   briefPanel.hidden = true;
   notesList.hidden = false;
+  sessionTitleWrap.hidden = false;
   formArea.hidden = false;
 }
 
@@ -511,11 +695,26 @@ copyBriefBtn.addEventListener("click", async () => {
   }
 });
 
+downloadBriefBtn.addEventListener("click", () => {
+  const text = briefContent.textContent;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `markup-brief-${dateStr}.md`;
+  const blob = new Blob([text], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
 closeBriefBtn.addEventListener("click", hideBrief);
 
 // ─── Messages from content script ─────────────────────────────
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "MARKUP_ACTIVATED") {
+    markupEverActivated = true;
+    activationHint.hidden = true;
     setToggleState(true);
   }
 
@@ -533,9 +732,11 @@ chrome.runtime.onMessage.addListener((message) => {
       }
       currentSelector = message.selector;
       currentNoteId   = null;
+      selectorRow.hidden = false;
       selectorDisplay.textContent = message.selector;
       noteInput.value = "";
       resetTypePicker();
+      updateClearSelectorVisibility();
       noteInput.focus();
     });
   }
@@ -549,23 +750,32 @@ chrome.runtime.onMessage.addListener((message) => {
       }
       currentSelector = null;
       currentNoteId   = null;
-      noteInput.value = "";
-      selectorDisplay.textContent = "No element selected";
+      // Bug 6 fix: only clear noteInput on an explicit user deselect (Markup still ON).
+      // When Markup deactivates, content script sends ELEMENT_DESELECTED before
+      // MARKUP_DEACTIVATED. By the time this .then() runs, MARKUP_DEACTIVATED has
+      // already fired and deactivateReset() has intentionally preserved noteInput.
+      // Clearing it here would undo that preservation.
+      if (markupActive) {
+        noteInput.value = "";
+      }
+      selectorDisplay.textContent = "Hover to preview element";
       resetTypePicker();
+      updateClearSelectorVisibility();
       // saveBtn stays enabled — Markup is still ON
     });
   }
 
   if (message.type === "ELEMENT_HOVERED") {
-    // Live hover preview — only update if no element is currently selected
+    // Bug 5: only update when Markup is ON (selectorRow is visible) and no element locked
     if (!currentSelector) {
+      selectorRow.hidden = false;
       selectorDisplay.textContent = message.selector;
     }
   }
 
   if (message.type === "ELEMENT_HOVER_END") {
     if (!currentSelector) {
-      selectorDisplay.textContent = markupActive ? "No element selected" : "Hover to preview element";
+      selectorDisplay.textContent = "Hover to preview element";
     }
   }
 });
@@ -576,11 +786,36 @@ async function init() {
     chrome.tabs.query({ active: true, currentWindow: true }, resolve);
   });
   const tab = tabs[0];
-  currentTabId = tab?.id || null;
-  tabTitle     = tab?.title || "";
-  if (currentTabId) {
-    notes = await loadNotes(currentTabId);
+  currentTabId  = tab?.id || null;
+  tabTitle      = tab?.title || "";
+  currentTabUrl = tab?.url || "";
+
+  // Bug 1 + Bug 8: derive storage key from normalized URL, not ephemeral tabId
+  currentNoteUrl = currentTabUrl ? normalizeUrl(currentTabUrl) : "";
+
+  if (currentNoteUrl) {
+    notes = await loadNotes();
+    const stored = await loadSessionTitle();
+    sessionTitle = stored !== null ? stored : tabTitle;
+    sessionTitleInput.value = sessionTitle;
     renderNotesList();
+  }
+
+  // Bug 3: if the content script is already active (sidebar was closed and reopened),
+  // sync the sidebar to ON without requiring the user to click toggle again.
+  if (currentTabId) {
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: currentTabId },
+        func: () => window.__markupActive === true,
+      });
+      if (results?.[0]?.result === true) {
+        markupEverActivated = true;
+        setToggleState(true);
+      }
+    } catch {
+      // Restricted page or content script unavailable — start in OFF state.
+    }
   }
 }
 

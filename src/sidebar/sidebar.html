@@ -16,6 +16,7 @@
     <header class="markup-header">
       <span class="markup-title">Markup</span>
       <span class="markup-note-count" id="note-count">0 notes</span>
+      <button class="btn-clear-all" id="clear-all" hidden>Clear all</button>
       <button class="toggle-btn" id="markup-toggle" aria-pressed="false">Off</button>
       <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
     </header>
@@ -23,27 +24,55 @@
     <!-- Activation error hint — shown only when content script can't be reached -->
     <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
 
+    <!-- Session title -->
+    <div class="session-title-wrap" id="session-title-wrap">
+      <input
+        class="session-title-input"
+        id="session-title"
+        type="text"
+        placeholder="Name this session…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
     <!-- Notes list -->
     <div class="markup-notes" id="notes-list" aria-label="Notes" aria-live="polite">
       <div class="empty-state" id="empty-state"></div>
     </div>
 
-    <!-- Brief output panel (shown when Generate AI Brief is clicked) -->
+    <!-- Inline clear-all confirmation -->
+    <div class="clear-confirm" id="clear-confirm" hidden>
+      <span class="clear-confirm__msg" id="clear-confirm-msg"></span>
+      <button class="clear-confirm__yes" id="clear-confirm-yes">Yes</button>
+      <button class="clear-confirm__no" id="clear-confirm-no">Cancel</button>
+    </div>
+
+    <!-- Brief output panel (shown when Generate Brief is clicked) -->
     <div class="brief-panel" id="brief-output" hidden>
       <div class="brief-panel__toolbar">
-        <span class="brief-panel__title">AI Brief</span>
-        <div class="brief-panel__actions">
-          <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
-          <button class="icon-btn" id="close-brief" aria-label="Close brief">✕</button>
-        </div>
+        <button class="brief-back-link" id="close-brief">← Back to Notes</button>
       </div>
       <pre class="brief-panel__content" id="brief-content"></pre>
+      <div class="brief-panel__footer">
+        <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
+        <button class="btn-copy-brief" id="download-brief">Download .md</button>
+      </div>
     </div>
 
     <!-- Note form -->
     <div class="markup-form-area">
       <form class="note-form" id="note-form" autocomplete="off">
-        <code class="selector-chip" id="selector-display">Hover to preview element</code>
+        <div class="selector-row">
+          <code class="selector-chip" id="selector-display">Hover to preview element</code>
+          <button
+            type="button"
+            class="btn-clear-selector"
+            id="clear-selector"
+            hidden
+            aria-label="Clear selected element"
+          >✕</button>
+        </div>
 
         <div class="note-form__types" role="group" aria-label="Note type">
           <button type="button" class="type-btn type-btn--active" data-type="general" data-tooltip="General observation or note" aria-pressed="true">General</button>
@@ -68,7 +97,7 @@
     <div class="markup-actions">
       <button class="btn-save" id="save-note" disabled aria-disabled="true">Save Note</button>
       <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
-        Generate AI Brief ↗
+        Generate Brief ↗
       </button>
     </div>
 

@@ -682,6 +682,7 @@
   var selectedEl = null;
   var isActive = false;
   window.__markupReady = true;
+  window.__markupActive = false;
   function injectCursorOverride() {
     if (document.getElementById(CURSOR_STYLE_ID)) return;
     const style = document.createElement("style");
@@ -794,6 +795,7 @@
   function activate() {
     if (isActive) return;
     isActive = true;
+    window.__markupActive = true;
     selectedEl = null;
     hideRing();
     injectCursorOverride();
@@ -808,6 +810,7 @@
   function deactivate() {
     if (!isActive) return;
     isActive = false;
+    window.__markupActive = false;
     clearSelection();
     hideRing();
     removeCursorOverride();
@@ -821,5 +824,6 @@
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === "MARKUP_ACTIVATE") activate();
     if (message.type === "MARKUP_DEACTIVATE") deactivate();
+    if (message.type === "MARKUP_DESELECT") clearSelection();
   });
 })();

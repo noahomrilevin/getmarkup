@@ -12,7 +12,8 @@ const HIGHLIGHT_COLOR = "#FF8400";
 let ring = null;
 let selectedEl = null;
 let isActive = false;
-window.__markupReady = true;
+window.__markupReady  = true;
+window.__markupActive = false; // Bug 3: sidebar reads this on reopen to restore state
 
 // ─── Fix 2: Cursor override ───────────────────────────────────────
 // Some sites hide the cursor with cursor:none. Force it visible while
@@ -168,7 +169,8 @@ function onKeydown(e) {
 function activate() {
   if (isActive) return;
   isActive = true;
-  selectedEl = null; // Bug 2: clear any stale selection from a previous session
+  window.__markupActive = true;
+  selectedEl = null; // clear any stale selection from a previous session
   hideRing();
   injectCursorOverride();
   ensureRing();
@@ -183,6 +185,7 @@ function activate() {
 function deactivate() {
   if (!isActive) return;
   isActive = false;
+  window.__markupActive = false;
   clearSelection();
   hideRing();
   removeCursorOverride();
@@ -198,4 +201,5 @@ function deactivate() {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "MARKUP_ACTIVATE") activate();
   if (message.type === "MARKUP_DEACTIVATE") deactivate();
+  if (message.type === "MARKUP_DESELECT") clearSelection();
 });

@@ -16,7 +16,5 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Markup: side panel registered");
 });
 
-// Clean up notes storage when a tab is closed
-chrome.tabs.onRemoved.addListener((tabId) => {
-  chrome.storage.local.remove(`markup_notes_${tabId}`);
-});
+// Notes are keyed by normalized URL (not tabId), so they persist across tab closes.
+// No cleanup needed on tab removal.
