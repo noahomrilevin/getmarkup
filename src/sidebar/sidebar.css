@@ -1,0 +1,345 @@
+/* Markup — Sidebar Styles — Sprint 2 */
+
+/* ─── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Design Tokens — Light mode default ─────────────────────── */
+:root {
+  /* Core surfaces */
+  --background:           #F2F3F0;
+  --foreground:           #111111;
+  --card:                 #FFFFFF;
+  --card-foreground:      #111111;
+  --muted:                #F2F3F0;
+  --muted-foreground:     #666666;
+  --border:               #CBCCC9;
+  --input:                #CBCCC9;
+
+  /* Primary CTA — orange, both modes */
+  --primary:              #FF8400;
+  --primary-foreground:   #111111;
+
+  /* Secondary */
+  --secondary:            #E7E8E5;
+  --secondary-foreground: #111111;
+
+  /* Destructive */
+  --destructive:          #D93C15;
+
+  /* Sidebar layer */
+  --sidebar:              #E7E8E5;
+  --sidebar-border:       #CBCCC9;
+  --sidebar-foreground:   #666666;
+
+  /* Focus ring */
+  --ring:                 #666666;
+
+  /* Semantic state colors — backgrounds and foregrounds */
+  --color-error:          #E5DCDA;
+  --color-error-fg:       #8C1C00;
+  --color-success:        #DFE6E1;
+  --color-success-fg:     #004D1A;
+  --color-warning:        #E9E3D8;
+  --color-warning-fg:     #804200;
+  --color-info:           #DFDFE6;
+  --color-info-fg:        #000066;
+
+  /* Typography */
+  --font-primary:   'JetBrains Mono', 'Fira Mono', 'Consolas', monospace;
+  --font-secondary: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+  --size-xs:   10px;
+  --size-sm:   12px;
+  --size-base: 14px;
+  --size-lg:   16px;
+
+  /* Shape */
+  --radius-m:    16px;
+  --radius-pill: 999px;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+}
+
+/* ─── Design Tokens — Dark mode ──────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background:           #111111;
+    --foreground:           #FFFFFF;
+    --card:                 #1A1A1A;
+    --card-foreground:      #FFFFFF;
+    --muted:                #2E2E2E;
+    --muted-foreground:     #B8B9B6;
+    --border:               #2E2E2E;
+    --input:                #2E2E2E;
+    --primary:              #FF8400;
+    --primary-foreground:   #111111;
+    --secondary:            #2E2E2E;
+    --secondary-foreground: #FFFFFF;
+    --destructive:          #FF5C33;
+    --sidebar:              #18181B;
+    --sidebar-border:       #ffffff1a;
+    --sidebar-foreground:   #fafafa;
+    --ring:                 #B8B9B6;
+    --color-error:          #24100B;
+    --color-error-fg:       #FF5C33;
+    --color-success:        #222924;
+    --color-success-fg:     #B6FFCE;
+    --color-warning:        #291C0F;
+    --color-warning-fg:     #FF8400;
+    --color-info:           #222229;
+    --color-info-fg:        #B2B2FF;
+  }
+}
+
+/* ─── Base ────────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  background: var(--sidebar);
+  color: var(--foreground);
+  font-family: var(--font-secondary);
+  font-size: var(--size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Sidebar shell ───────────────────────────────────────────── */
+.markup-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--sidebar);
+  overflow: hidden;
+}
+
+/* ─── Header ──────────────────────────────────────────────────── */
+.markup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+  background: var(--sidebar);
+}
+
+.markup-title {
+  font-size: var(--size-base);
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+.markup-note-count {
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  flex: 1;
+  text-align: center;
+}
+
+/* ─── Notes list ──────────────────────────────────────────────── */
+.markup-notes {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+/* ─── Empty state ─────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 80px;
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+/* ─── Note form area ──────────────────────────────────────────── */
+.markup-form-area {
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm);
+  background: var(--card);
+  flex-shrink: 0;
+}
+
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.note-form__types {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.note-form__input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-m);
+  color: var(--foreground);
+  font-family: var(--font-secondary);
+  font-size: var(--size-base);
+  padding: var(--space-sm);
+  resize: vertical;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.note-form__input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.note-form__input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* ─── Actions footer ──────────────────────────────────────────── */
+.markup-actions {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--sidebar);
+}
+
+/* ─── NoteTypeTag ─────────────────────────────────────────────── */
+.note-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-sm);
+  font-weight: 500;
+  font-family: var(--font-secondary);
+}
+
+.note-type-tag--bug      { background: var(--color-error);   color: var(--color-error-fg); }
+.note-type-tag--design   { background: var(--color-info);    color: var(--color-info-fg); }
+.note-type-tag--copy     { background: var(--color-warning); color: var(--color-warning-fg); }
+.note-type-tag--question { background: var(--muted);         color: var(--muted-foreground); }
+
+/* ─── SelectorChip ────────────────────────────────────────────── */
+.selector-chip {
+  font-family: var(--font-primary);
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  background: var(--muted);
+  padding: 1px var(--space-xs);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── NoteCard ────────────────────────────────────────────────── */
+.note-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.note-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.note-card__text {
+  font-size: var(--size-base);
+  color: var(--foreground);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: none;
+  border-radius: var(--radius-m);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--size-base);
+  font-family: var(--font-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--size-base);
+  font-family: var(--font-secondary);
+  cursor: pointer;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: 4px;
+  line-height: 1;
+  font-size: var(--size-base);
+}
+
+.icon-btn:hover {
+  color: var(--foreground);
+}
+
+.type-btn {
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: var(--size-sm);
+  font-family: var(--font-secondary);
+  cursor: pointer;
+}
+
+.type-btn--active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+/* ─── Focus rings — accessibility ────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

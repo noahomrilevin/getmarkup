@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markup</title>
+  <link rel="stylesheet" href="sidebar.css" />
+</head>
+<body>
+  <div class="markup-sidebar">
+
+    <!-- Header -->
+    <header class="markup-header">
+      <span class="markup-title">Markup</span>
+      <span class="markup-note-count" id="note-count">0 notes</span>
+      <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
+    </header>
+
+    <!-- Notes list -->
+    <div class="markup-notes" id="notes-list" aria-label="Notes" aria-live="polite">
+      <p class="empty-state" id="empty-state">Click any element to annotate.</p>
+    </div>
+
+    <!-- Note form -->
+    <div class="markup-form-area">
+      <form class="note-form" id="note-form" autocomplete="off">
+        <code class="selector-chip" id="selector-display">Click an element to select it</code>
+
+        <div class="note-form__types" role="group" aria-label="Note type">
+          <button type="button" class="type-btn type-btn--active" data-type="bug" aria-pressed="true">🐛 Bug</button>
+          <button type="button" class="type-btn" data-type="design" aria-pressed="false">🎨 Design</button>
+          <button type="button" class="type-btn" data-type="copy" aria-pressed="false">✍️ Copy</button>
+          <button type="button" class="type-btn" data-type="question" aria-pressed="false">❓</button>
+        </div>
+
+        <textarea
+          class="note-form__input"
+          id="note-input"
+          placeholder="Describe the issue… or speak via Wispr Flow"
+          rows="3"
+          aria-label="Note text"
+        ></textarea>
+      </form>
+    </div>
+
+    <!-- Actions footer -->
+    <div class="markup-actions">
+      <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
+        Generate AI Brief ↗
+      </button>
+    </div>
+
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>
