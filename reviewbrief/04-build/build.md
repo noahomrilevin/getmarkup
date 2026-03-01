@@ -108,14 +108,14 @@ src/
 
 | Story | Acceptance Criteria | Done? |
 |---|---|---|
-| Content script injects | `content.js` runs on every page; logs "Markup content script ready" | [ ] |
-| Click interception | Clicking any element does NOT navigate or fire default — Markup intercepts | [ ] |
-| CSS selector generated | `css-selector-generator` returns a unique selector for any clicked element | [ ] |
-| Selector sent to sidebar | Content script posts selector to sidebar via `chrome.runtime.sendMessage` | [ ] |
-| Selector appears in sidebar | Note form shows the selector of the last-clicked element | [ ] |
-| Highlight ring on hover | Orange ring (`2px solid #FF8400`) appears on element under cursor | [ ] |
-| Highlight ring on click | Ring stays on clicked element while note form is active | [ ] |
-| Escape removes highlight | Pressing Escape removes highlight ring and clears the selected element | [ ] |
+| Content script injects | `content.js` runs on every page; logs "Markup content script ready" | [x] |
+| Click interception | Clicking any element does NOT navigate or fire default — Markup intercepts | [x] |
+| CSS selector generated | `css-selector-generator` returns a unique selector for any clicked element | [x] |
+| Selector sent to sidebar | Content script posts selector to sidebar via `chrome.runtime.sendMessage` | [x] |
+| Selector appears in sidebar | Note form shows the selector of the last-clicked element | [x] |
+| Highlight ring on hover | Orange ring (`2px solid #FF8400`) appears on element under cursor | [x] |
+| Highlight ring on click | Ring stays on clicked element while note form is active | [x] |
+| Escape removes highlight | Pressing Escape removes highlight ring and clears the selected element | [x] |
 
 **Ship / Don't Ship:** Ship if clicking any element shows its selector in the sidebar with a visible highlight. Don't ship if selector is wrong, missing, or crashes on SPAs.
 
@@ -126,15 +126,15 @@ src/
 
 | Story | Acceptance Criteria | Done? |
 |---|---|---|
-| Note textarea auto-focuses | When element is selected, textarea in sidebar focuses immediately (Wispr Flow-compatible) | [ ] |
-| Type picker renders | Bug / Design / Copy / Question buttons visible; Bug selected by default | [ ] |
-| Type picker works | Clicking a type button makes it active; only one active at a time | [ ] |
-| Note saves on input | Note saves to `chrome.storage.local` as user types (debounced 500ms) | [ ] |
-| Note appears in list | Saved note renders as a NoteCard in the notes list above the form | [ ] |
-| NoteCard shows type tag | Tag with emoji + label (e.g. "🐛 Bug") appears on the card | [ ] |
-| NoteCard shows selector | SelectorChip shows the element selector on the card | [ ] |
-| Delete note | Delete button on NoteCard removes note from storage and UI | [ ] |
-| Form resets after save | After note saves, form clears and shows "Click an element to select it" | [ ] |
+| Note textarea auto-focuses | When element is selected, textarea in sidebar focuses immediately (Wispr Flow-compatible) | [x] |
+| Type picker renders | Bug / Design / Copy / Question buttons visible; Bug selected by default | [x] |
+| Type picker works | Clicking a type button makes it active; only one active at a time | [x] |
+| Note saves on input | Note saves to `chrome.storage.local` as user types (debounced 500ms) | [x] |
+| Note appears in list | Saved note renders as a NoteCard in the notes list above the form | [x] |
+| NoteCard shows type tag | Tag with emoji + label (e.g. "🐛 Bug") appears on the card | [x] |
+| NoteCard shows selector | SelectorChip shows the element selector on the card | [x] |
+| Delete note | Delete button on NoteCard removes note from storage and UI | [x] |
+| Form resets after save | After note saves, form clears and shows "Click an element to select it" | [x] |
 
 **Ship / Don't Ship:** Ship if a note can be created, saved, and deleted. Don't ship if notes don't appear in list or storage write fails.
 
@@ -275,3 +275,15 @@ No formal TDD. Instead:
 - Notes are lost or corrupted
 - Core loop (click → annotate → brief) is broken on any supported URL type
 - Extension crashes on install or causes the browser tab to break
+
+---
+
+## Backlog — Deferred Features
+
+| Feature | Description | Sprint candidate |
+|---|---|---|
+| Viewport toggle | Let users preview page at common device widths (mobile 375px, tablet 768px, desktop 1280px) from inside the sidebar. Useful for responsive bug annotation. | Sprint 7 |
+| Refresh / reinitialize button | A button in the sidebar that re-injects the content script without requiring a manual page refresh. Solves the intermittent activation issue for users who don't know to refresh. | Sprint 7 |
+| Remote review mode | Tester uses Markup on a staging URL, session syncs back to the builder. Requires backend or sync layer. | V3 |
+| Screenshot on note | Automatically capture a screenshot of the selected element when a note is saved. Attaches as context to the AI brief. | Sprint 8 |
+| Mobile/desktop viewport simulator | Trigger Chrome's device emulation programmatically from the sidebar so users can annotate responsive issues without opening DevTools. | Sprint 8 |
