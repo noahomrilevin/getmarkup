@@ -33,7 +33,6 @@ const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 
 // ─── Storage quota constants (Sprint 8 F4) ─────────────────────
 const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
-const QUOTA_BLOCK_BYTES = 4.8 * 1024 * 1024; // 4.8 MB — block saves
 
 // ─── State ─────────────────────────────────────────────────────
 let currentSelector       = null;
@@ -533,11 +532,7 @@ async function checkStorageQuota() {
     const bytesUsed = await new Promise((resolve) =>
       chrome.storage.local.getBytesInUse(null, resolve)
     );
-    if (bytesUsed >= QUOTA_BLOCK_BYTES) {
-      storageQuotaWarning.className = "storage-quota-warning storage-quota-warning--critical";
-      storageQuotaWarning.textContent = "Storage full — export or clear notes before saving.";
-      storageQuotaWarning.hidden = false;
-    } else if (bytesUsed >= QUOTA_WARN_BYTES) {
+    if (bytesUsed >= QUOTA_WARN_BYTES) {
       storageQuotaWarning.className = "storage-quota-warning storage-quota-warning--warn";
       storageQuotaWarning.textContent = "Storage almost full — export your notes or clear old sessions.";
       storageQuotaWarning.hidden = false;
@@ -720,12 +715,7 @@ async function flushSave() {
   const text = noteInput.value.trim();
   if (!text) return;
 
-  // Sprint 8 F4: block save if storage is critically full
-  const bytesUsed = await checkStorageQuota();
-  if (bytesUsed >= QUOTA_BLOCK_BYTES) {
-    showToast("Storage full — export or clear notes first.");
-    return;
-  }
+  checkStorageQuota(); // Sprint 8 F4: update warning strip (non-blocking)
 
   const type     = getActiveType();
   const severity = getActiveSeverity();
