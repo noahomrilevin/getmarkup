@@ -681,9 +681,18 @@
   var CURSOR_STYLE_ID = "__markup-cursor";
   var BADGE_CLASS = "__markup-badge";
   var HIGHLIGHT_COLOR = "#FF8400";
+  if (window !== window.top) {
+    try {
+      chrome.runtime.sendMessage({ type: "IFRAME_DETECTED" }).catch(() => {
+      });
+    } catch {
+    }
+    throw new Error("Markup: iframe detected \u2014 content script passive");
+  }
   var ring = null;
   var selectedEl = null;
   var isActive = false;
+  var currentLockedSelector = null;
   var mutationObserver = null;
   var reposTimeout = null;
   window["__mkp_" + chrome.runtime.id + "_ready"] = true;
@@ -709,7 +718,22 @@
       if (reposTimeout) clearTimeout(reposTimeout);
       reposTimeout = setTimeout(() => {
         reposTimeout = null;
-        if (isActive && selectedEl) positionRing(selectedEl);
+        if (!isActive || !selectedEl) return;
+        if (currentLockedSelector) {
+          let found = null;
+          try {
+            found = document.querySelector(currentLockedSelector);
+          } catch {
+          }
+          if (!found) {
+            clearSelection();
+            return;
+          }
+          if (!document.body.contains(selectedEl)) {
+            selectedEl = found;
+          }
+        }
+        positionRing(selectedEl);
       }, 300);
     });
     mutationObserver.observe(target, { childList: true, subtree: true });
@@ -925,6 +949,7 @@
   }
   function clearSelection() {
     selectedEl = null;
+    currentLockedSelector = null;
     hideRing();
     hideEscHint();
     sendToSidebar({ type: "ELEMENT_DESELECTED" });
@@ -962,6 +987,7 @@
     const selector = getSelector(target);
     if (!selector) return;
     selectedEl = target;
+    currentLockedSelector = selector;
     setRingMode("selected");
     positionRing(target);
     showEscHint();

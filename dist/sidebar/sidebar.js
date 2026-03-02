@@ -38,6 +38,9 @@ const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
 const BRIEFS_KEY  = "markup_briefs_all";
 const BRIEFS_MAX  = 50;
 
+// ─── Sprint 9: Developer Mode storage key ──────────────────────
+const DEV_MODE_KEY = "markup_dev_mode";
+
 // ─── State ─────────────────────────────────────────────────────
 let currentSelector       = null;
 let currentElementLabel   = null; // Sprint 8 F5: human-readable label
@@ -62,6 +65,8 @@ let pendingElementSelector = null;
 let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
 let briefReaderCurrentBrief = null; // brief object open in reader
 let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
+let devMode               = false; // Sprint 9: Developer Mode (false = Simple Mode)
+let iframeNoticeDismissed = false; // Sprint 9: show iframe notice only once
 
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
@@ -123,6 +128,13 @@ const settingsVersionEl  = document.getElementById("settings-version");
 const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
 const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
+// Sprint 9 new DOM refs
+const devBadgeEl         = document.getElementById("dev-badge");
+const devModeToggle      = document.getElementById("dev-mode-toggle");
+const iframeNoticeEl     = document.getElementById("iframe-notice");
+const reloadBtn          = document.getElementById("reload-btn");
+const noteTypesRow       = document.querySelector(".note-form__types");
+const noteSeveritiesRow  = document.querySelector(".note-form__severities");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
@@ -163,16 +175,59 @@ async function safeSet(data) {
   }
 }
 
-// ─── Toggle state ──────────────────────────────────────────────
+// ─── Sprint 9: Developer Mode ──────────────────────────────────
+function applyDevMode(enabled) {
+  devMode = enabled;
+  // DEV badge
+  if (devBadgeEl) devBadgeEl.hidden = !enabled;
+  // Show/hide type and severity pickers
+  if (noteTypesRow) noteTypesRow.classList.toggle("dev-mode-hidden", !enabled);
+  if (noteSeveritiesRow) noteSeveritiesRow.classList.toggle("dev-mode-hidden", !enabled);
+  // Show/hide selector row (only when active + devMode, or just when active for both)
+  // Selector row visibility is already managed by setToggleState + element selection.
+  // In simple mode, always hide selector-row regardless.
+  if (!enabled) {
+    selectorRow.hidden = true;
+    currentSelector = null;
+    currentElementLabel = null;
+    if (selectorDisplay) {
+      selectorDisplay.textContent = "Hover to preview element";
+      selectorDisplay.className = "selector-chip selector-chip--empty";
+    }
+    updateClearSelectorVisibility();
+  }
+  // Re-render notes to show/hide type/severity badges
+  renderNotesList();
+}
+
+async function loadDevMode() {
+  const stored = await safeGet(DEV_MODE_KEY, false);
+  devMode = !!stored;
+  if (devModeToggle) devModeToggle.checked = devMode;
+  applyDevMode(devMode);
+}
+
+async function setDevMode(enabled) {
+  devMode = enabled;
+  await safeSet({ [DEV_MODE_KEY]: enabled });
+  if (devModeToggle) devModeToggle.checked = enabled;
+  applyDevMode(enabled);
+}
+
+// ─── Sprint 9: Toggle state ──────────────────────────────────────
 function setToggleState(active) {
   markupActive = active;
   if (active) {
     toggleBtn.textContent = "Elements ON";
     toggleBtn.classList.add("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "true");
-    selectorRow.hidden = false;
-    if (!currentSelector) {
-      selectorDisplay.textContent = "Hover to preview element";
+    // In dev mode, show selector row; in simple mode, keep it hidden
+    if (devMode) {
+      selectorRow.hidden = false;
+      if (!currentSelector) {
+        selectorDisplay.textContent = "Hover to preview element";
+        selectorDisplay.className = "selector-chip selector-chip--empty";
+      }
     }
   } else {
     toggleBtn.textContent = "Elements OFF";
@@ -256,7 +311,7 @@ closeBtn.addEventListener("click", () => {
   window.close();
 });
 
-// ─── Empty state ───────────────────────────────────────────────
+// ─── Empty state (Sprint 9 — 2e) ───────────────────────────────
 function updateEmptyState() {
   emptyState.innerHTML = "";
   if (notes.length > 0) {
@@ -265,23 +320,31 @@ function updateEmptyState() {
   }
   emptyState.style.display = "";
 
+  if (!devMode) {
+    // Simple Mode empty state
+    const text = document.createElement("p");
+    text.className = "empty-state__body";
+    text.textContent = "Click anything on this page to leave a note.";
+    emptyState.append(text);
+    return;
+  }
+
+  // Developer Mode — three states
   if (!markupActive) {
+    // No notes, Elements OFF
     const heading = document.createElement("p");
     heading.className = "empty-state__heading";
     heading.textContent = "Ready to annotate?";
-    const text = document.createElement("p");
-    text.className = "empty-state__text";
-    text.textContent = "Turn Markup on to start selecting elements.";
-    const btn = document.createElement("button");
-    btn.className = "btn-activate";
-    btn.textContent = "Turn Markup On";
-    btn.addEventListener("click", sendToggle);
-    emptyState.append(heading, text, btn);
+    const body = document.createElement("p");
+    body.className = "empty-state__body";
+    body.textContent = "Turn Elements on to start selecting, or type a general note below.";
+    emptyState.append(heading, body);
   } else {
-    const text = document.createElement("p");
-    text.className = "empty-state__text";
-    text.textContent = "Click any element to annotate, or save a general note about this page.";
-    emptyState.append(text);
+    // No notes, Elements ON
+    const hint = document.createElement("p");
+    hint.className = "empty-state__hint";
+    hint.textContent = "Hover an element to preview its selector";
+    emptyState.append(hint);
   }
 }
 
@@ -299,7 +362,10 @@ severityButtons.forEach((btn) => {
 filterTabEls.forEach((tab) => {
   tab.addEventListener("click", () => {
     activeFilter = tab.dataset.filter;
-    filterTabEls.forEach((t) => t.classList.toggle("filter-tab--active", t.dataset.filter === activeFilter));
+    filterTabEls.forEach((t) => {
+      t.classList.toggle("filter-tab--active", t.dataset.filter === activeFilter);
+      t.setAttribute("aria-selected", t.dataset.filter === activeFilter ? "true" : "false"); // Sprint 9 (3c)
+    });
     renderNotesList();
   });
 });
@@ -514,9 +580,16 @@ async function renderBriefsArchiveList() {
   briefsArchiveList.innerHTML = "";
 
   if (briefs.length === 0) {
-    const empty = document.createElement("p");
+    // Sprint 9 (2e): redesigned empty state with Playfair heading
+    const empty = document.createElement("div");
     empty.className = "briefs-archive__empty";
-    empty.textContent = "No briefs yet. Generate your first brief below.";
+    const heading = document.createElement("p");
+    heading.className = "empty-state__heading";
+    heading.textContent = "No briefs yet.";
+    const body = document.createElement("p");
+    body.className = "empty-state__body";
+    body.textContent = "Generate your first brief below.";
+    empty.append(heading, body);
     briefsArchiveList.appendChild(empty);
     return;
   }
@@ -746,20 +819,16 @@ function createNoteCard(note) {
   const severity = note.severity || "medium";
   const sevConfig = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.medium;
   const card = document.createElement("div");
+
+  // Sprint 9 (3e): role="article" + accessible label
+  const textPreview = (note.text || "").slice(0, 60);
+  const ariaLabel = devMode
+    ? `${config.label} note, ${sevConfig.label} severity: ${textPreview}`
+    : `Note: ${textPreview}`;
   card.className = "note-card";
+  card.setAttribute("role", "article");
+  card.setAttribute("aria-label", ariaLabel);
   card.dataset.noteId = note.id;
-
-  let locationChip = "";
-  if (note.selector) {
-    locationChip = `<code class="selector-chip">${escapeHtml(note.selector)}</code>`;
-  } else if (note.type === "general") {
-    locationChip = `<span class="general-note-label">General note</span>`;
-  }
-
-  // Sprint 8 F5: element label row
-  const labelChip = note.elementLabel
-    ? `<span class="note-element-label">${escapeHtml(note.elementLabel)}</span>`
-    : "";
 
   // Sprint 8 F7: relative timestamp
   const tsStr = getRelativeTime(note.createdAt);
@@ -767,24 +836,54 @@ function createNoteCard(note) {
     ? `<span class="note-card__timestamp" data-ts="${Number(note.createdAt)||0}">${escapeHtml(tsStr)}</span>`
     : "";
 
-  card.innerHTML = `
-    <div class="note-card__header">
-      <div class="note-card__tags">
-        <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
-        <span class="note-severity-badge note-severity-badge--${escapeHtml(severity)}">${sevConfig.label}</span>
-      </div>
-      <div class="note-card__meta-right">
-        ${tsHtml}
-        <div class="note-card__actions">
-          <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
-          <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
+  if (!devMode) {
+    // Simple Mode: text + timestamp only, no type/severity badges, no selector
+    card.classList.add("note-card--simple");
+    card.innerHTML = `
+      <div class="note-card__header">
+        <div class="note-card__meta-right">
+          ${tsHtml}
+          <div class="note-card__actions">
+            <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
+            <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
+          </div>
         </div>
       </div>
-    </div>
-    ${locationChip}
-    ${labelChip}
-    <p class="note-card__text">${escapeHtml(note.text)}</p>
-  `;
+      <p class="note-card__text">${escapeHtml(note.text)}</p>
+    `;
+  } else {
+    // Developer Mode: full card with type/severity/selector
+    let locationChip = "";
+    if (note.selector) {
+      locationChip = `<code class="selector-chip selector-chip--filled">${escapeHtml(note.selector)}</code>`;
+    } else if (note.type === "general") {
+      locationChip = `<span class="general-note-label">General note</span>`;
+    }
+
+    // Sprint 8 F5: element label row
+    const labelChip = note.elementLabel
+      ? `<span class="note-element-label">${escapeHtml(note.elementLabel)}</span>`
+      : "";
+
+    card.innerHTML = `
+      <div class="note-card__header">
+        <div class="note-card__tags">
+          <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
+          <span class="note-severity-badge note-severity-badge--${escapeHtml(severity)}">${sevConfig.label}</span>
+        </div>
+        <div class="note-card__meta-right">
+          ${tsHtml}
+          <div class="note-card__actions">
+            <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
+            <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
+          </div>
+        </div>
+      </div>
+      ${locationChip}
+      ${labelChip}
+      <p class="note-card__text">${escapeHtml(note.text)}</p>
+    `;
+  }
 
   card.querySelector(".edit-btn").addEventListener("click", () => { enterEditMode(note); });
   card.querySelector(".delete-btn").addEventListener("click", () => { deleteNote(note.id); });
@@ -854,8 +953,9 @@ async function flushSave() {
 
   checkStorageQuota(); // Sprint 8 F4: update warning strip (non-blocking)
 
-  const type     = getActiveType();
-  const severity = getActiveSeverity();
+  // Sprint 9 (F1): In simple mode, always use defaults (pickers are hidden)
+  const type     = devMode ? getActiveType()     : "general";
+  const severity = devMode ? getActiveSeverity() : "medium";
 
   if (currentNoteId) {
     const idx = notes.findIndex((n) => n.id === currentNoteId);
@@ -940,8 +1040,13 @@ function enterEditMode(note) {
   noteInput.value  = note.text;
   setTypePicker(note.type);
   setSeverityPicker(note.severity || "medium");
-  selectorRow.hidden = false;
-  selectorDisplay.textContent = note.selector || "Hover to preview element";
+  // Sprint 9 (F1): only show selector row in dev mode
+  if (devMode) {
+    selectorRow.hidden = false;
+    const hasSelector = !!note.selector;
+    selectorDisplay.textContent = note.selector || "Hover to preview element";
+    selectorDisplay.className = `selector-chip ${hasSelector ? "selector-chip--filled" : "selector-chip--empty"}`;
+  }
   saveBtn.textContent = "Update Note";
   updateClearSelectorVisibility();
   noteInput.focus();
@@ -963,6 +1068,12 @@ function exitEditMode() {
 
 // ─── Delete note ───────────────────────────────────────────────
 async function deleteNote(id) {
+  // Sprint 9 (2j): exit animation before removal
+  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
+  if (card) {
+    card.classList.add("note-card--exiting");
+    await new Promise((r) => setTimeout(r, 200));
+  }
   pushUndo("Note restored");
   notes = notes.filter((n) => n.id !== id);
   await persistNotes();
@@ -1019,6 +1130,7 @@ clearSelectorBtn.addEventListener("click", async () => {
   currentSelector = null;
   currentElementLabel = null;
   selectorDisplay.textContent = "Hover to preview element";
+  selectorDisplay.className = "selector-chip selector-chip--empty"; // Sprint 9 (2i)
   updateClearSelectorVisibility();
 });
 
@@ -1054,8 +1166,11 @@ notePendingSaveBtn.addEventListener("click", async () => {
   if (sel) {
     currentSelector = sel;
     currentNoteId   = null;
-    selectorRow.hidden = false;
-    selectorDisplay.textContent = sel;
+    if (devMode) {
+      selectorRow.hidden = false;
+      selectorDisplay.textContent = sel;
+      selectorDisplay.className = "selector-chip selector-chip--filled";
+    }
     updateClearSelectorVisibility();
     noteInput.focus();
   }
@@ -1071,15 +1186,59 @@ notePendingDiscardBtn.addEventListener("click", () => {
   currentNoteId = null;
   if (sel) {
     currentSelector = sel;
-    selectorRow.hidden = false;
-    selectorDisplay.textContent = sel;
+    if (devMode) {
+      selectorRow.hidden = false;
+      selectorDisplay.textContent = sel;
+      selectorDisplay.className = "selector-chip selector-chip--filled";
+    }
     updateClearSelectorVisibility();
     noteInput.focus();
   }
 });
 
 // ─── Brief panel ───────────────────────────────────────────────
+
+// Sprint 9 (F1): Simple Mode brief — plain prose, no selectors, no emoji headers
+function buildSimpleBriefText() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", {
+    hour: "numeric", minute: "2-digit",
+  });
+  const project = sessionTitle || tabTitle || "Unknown";
+
+  const lines = [
+    `# Markup — Feedback`,
+    ``,
+    `**Project:** ${project}`,
+    `**URL:** ${currentTabUrl || "Unknown"}`,
+    `**Date:** ${dateStr} at ${timeStr}`,
+    `**Notes:** ${notes.length}`,
+    ``,
+    `---`,
+    ``,
+  ];
+
+  const sorted = briefSortMode === "chronological"
+    ? [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    : [...notes];
+
+  sorted.forEach((note, i) => {
+    if (i > 0) lines.push(``);
+    lines.push(note.text);
+  });
+
+  lines.push(``);
+  lines.push(`---`);
+
+  return lines.join("\n");
+}
+
 function buildBriefText() {
+  // Sprint 9 (F1): delegate to simple brief in simple mode
+  if (!devMode) return buildSimpleBriefText();
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -1277,10 +1436,25 @@ async function loadSettingsPanel() {
     }
   } catch { /* */ }
 
+  // Sprint 9 (F1): Sync developer mode toggle to current state
+  if (devModeToggle) devModeToggle.checked = devMode;
 }
 
 settingsBtn.addEventListener("click", showSettings);
 closeSettingsBtn.addEventListener("click", hideSettings);
+
+// Sprint 9 (F1): Developer Mode toggle
+if (devModeToggle) {
+  devModeToggle.addEventListener("change", async (e) => {
+    await setDevMode(e.target.checked);
+    showToast(e.target.checked ? "Developer Mode on" : "Simple Mode on");
+  });
+}
+
+// Sprint 9 (F4): Reload button
+if (reloadBtn) {
+  reloadBtn.addEventListener("click", () => { window.location.reload(); });
+}
 
 // Brief sort pill toggle
 briefSortBtns.forEach((btn) => {
@@ -1408,8 +1582,12 @@ chrome.runtime.onMessage.addListener((message) => {
       currentSelector     = message.selector;
       currentElementLabel = message.elementLabel || null; // Sprint 8 F5
       currentNoteId       = null;
-      selectorRow.hidden  = false;
-      selectorDisplay.textContent = message.selector;
+      // Sprint 9 (F1 + 2i): only show selector chip in dev mode; add filled class
+      if (devMode) {
+        selectorRow.hidden  = false;
+        selectorDisplay.textContent = message.selector;
+        selectorDisplay.className = "selector-chip selector-chip--filled";
+      }
       noteInput.value = "";
       resetTypePicker();
       updateClearSelectorVisibility();
@@ -1435,21 +1613,36 @@ chrome.runtime.onMessage.addListener((message) => {
         noteInput.value = "";
       }
       selectorDisplay.textContent = "Hover to preview element";
+      selectorDisplay.className = "selector-chip selector-chip--empty"; // Sprint 9 (2i)
       resetTypePicker();
       updateClearSelectorVisibility();
     });
   }
 
   if (message.type === "ELEMENT_HOVERED") {
-    if (!currentSelector) {
+    // Sprint 9 (F1 + 2i): only show selector in dev mode; use empty chip class
+    if (!currentSelector && devMode) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = message.selector;
+      selectorDisplay.className = "selector-chip selector-chip--empty";
     }
   }
 
   if (message.type === "ELEMENT_HOVER_END") {
     if (!currentSelector) {
       selectorDisplay.textContent = "Hover to preview element";
+      selectorDisplay.className = "selector-chip selector-chip--empty";
+    }
+  }
+
+  // Sprint 9 (F4): iframe detection notice
+  if (message.type === "IFRAME_DETECTED") {
+    if (!iframeNoticeDismissed && iframeNoticeEl) {
+      iframeNoticeEl.hidden = false;
+      setTimeout(() => {
+        iframeNoticeEl.hidden = true;
+        iframeNoticeDismissed = true;
+      }, 6000);
     }
   }
 
@@ -1525,6 +1718,9 @@ async function init() {
     const manifest = chrome.runtime.getManifest();
     document.getElementById("version-text").textContent = `getmarkup.dev · v${manifest.version}`;
   } catch { /* not critical */ }
+
+  // Sprint 9 (F1): Load dev mode before rendering anything
+  await loadDevMode();
 
   // Load brief sort setting — sync pill toggle
   try {

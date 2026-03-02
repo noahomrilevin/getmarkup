@@ -16,9 +16,10 @@
     <header class="markup-header">
       <span class="markup-title">Markup</span>
       <span class="markup-note-count" id="note-count">0 notes</span>
-      <button class="btn-clear-all" id="clear-all" hidden>Clear all</button>
-      <button class="icon-btn" id="briefs-archive-btn" aria-label="Open Briefs Archive">📄</button>
-      <button class="icon-btn" id="settings-btn" aria-label="Settings">⚙</button>
+      <span class="dev-badge" id="dev-badge" hidden aria-label="Developer Mode active">DEV</span>
+      <button class="btn-clear-all" id="clear-all" hidden aria-label="Clear all notes">Clear all</button>
+      <button class="icon-btn" id="briefs-archive-btn" aria-label="Open briefs archive">📄</button>
+      <button class="icon-btn" id="settings-btn" aria-label="Open settings">⚙</button>
       <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
     </header>
 
@@ -38,13 +39,18 @@
     <!-- Storage quota warning (Sprint 8 F4) -->
     <div class="storage-quota-warning" id="storage-quota-warning" hidden></div>
 
+    <!-- Sprint 9 (4b): iframe notice — shown once when iframe detected -->
+    <div class="iframe-notice" id="iframe-notice" hidden>
+      ⚠ This page uses iframes — element selection may be limited.
+    </div>
+
     <!-- Filter tabs -->
-    <div class="filter-tabs" id="filter-tabs">
-      <button class="filter-tab filter-tab--active" data-filter="all">All</button>
-      <button class="filter-tab" data-filter="critical">Critical</button>
-      <button class="filter-tab" data-filter="high">High</button>
-      <button class="filter-tab" data-filter="medium">Medium</button>
-      <button class="filter-tab" data-filter="low">Low</button>
+    <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="Filter notes by severity">
+      <button class="filter-tab filter-tab--active" data-filter="all" role="tab" aria-selected="true">All</button>
+      <button class="filter-tab" data-filter="critical" role="tab" aria-selected="false">Critical</button>
+      <button class="filter-tab" data-filter="high" role="tab" aria-selected="false">High</button>
+      <button class="filter-tab" data-filter="medium" role="tab" aria-selected="false">Medium</button>
+      <button class="filter-tab" data-filter="low" role="tab" aria-selected="false">Low</button>
     </div>
 
     <!-- 3 · Notes list (or empty state) -->
@@ -118,7 +124,7 @@
           id="note-input"
           placeholder="Describe the issue… or speak via Wispr Flow"
           rows="3"
-          aria-label="Note text"
+          aria-label="Note text — describe the issue or speak via Wispr Flow"
         ></textarea>
       </form>
 
@@ -159,6 +165,20 @@
           <div class="settings-section__actions">
             <button class="btn-settings-action" id="export-json">Download JSON</button>
             <button class="btn-settings-action" id="export-csv">Download CSV</button>
+          </div>
+        </section>
+
+        <!-- Developer Mode (Sprint 9 Feature 1) -->
+        <section class="settings-section">
+          <div class="settings-toggle-row">
+            <div class="settings-toggle-info">
+              <span class="settings-toggle-label">Developer Mode</span>
+              <span class="settings-toggle-desc">Show element selectors, type and severity pickers. For developers and QA engineers.</span>
+            </div>
+            <label class="toggle-switch" aria-label="Developer Mode toggle">
+              <input type="checkbox" id="dev-mode-toggle" aria-label="Developer Mode">
+              <span class="toggle-switch__track"></span>
+            </label>
           </div>
         </section>
 
@@ -210,6 +230,7 @@
 
     <!-- 12 · Version footer -->
     <div class="markup-version-footer">
+      <button class="btn-reload" id="reload-btn" aria-label="Reload Markup sidebar">Reload</button>
       <span class="markup-version-footer__text" id="version-text"></span>
     </div>
 

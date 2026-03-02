@@ -11,10 +11,21 @@ const CURSOR_STYLE_ID = "__markup-cursor";
 const BADGE_CLASS     = "__markup-badge";
 const HIGHLIGHT_COLOR = "#FF8400";
 
+// ─── Sprint 9: iframe detection (Feature 4b) ─────────────────────────
+// If running inside an iframe, do not inject ring or intercept clicks.
+if (window !== window.top) {
+  try {
+    chrome.runtime.sendMessage({ type: "IFRAME_DETECTED" }).catch(() => {});
+  } catch { /* extension context may not be ready */ }
+  // Stop all content script execution here — do not set up ring or listeners
+  throw new Error("Markup: iframe detected — content script passive");
+}
+
 // ─── State ────────────────────────────────────────────────────────
 let ring      = null;
 let selectedEl = null;
 let isActive   = false;
+let currentLockedSelector = null; // Sprint 9: for SPA resilience (4a)
 
 // Fix 4: MutationObserver repositions the ring when the page's DOM shifts
 let mutationObserver = null;
@@ -49,7 +60,22 @@ function startMutationObserver() {
     if (reposTimeout) clearTimeout(reposTimeout);
     reposTimeout = setTimeout(() => {
       reposTimeout = null;
-      if (isActive && selectedEl) positionRing(selectedEl);
+      if (!isActive || !selectedEl) return;
+      // Sprint 9 (4a): SPA resilience — verify locked element still in DOM
+      if (currentLockedSelector) {
+        let found = null;
+        try { found = document.querySelector(currentLockedSelector); } catch { /* invalid selector */ }
+        if (!found) {
+          // Element gone after React/Vue re-render — silently release lock
+          clearSelection();
+          return;
+        }
+        // Element may have been re-mounted to a new DOM node
+        if (!document.body.contains(selectedEl)) {
+          selectedEl = found;
+        }
+      }
+      positionRing(selectedEl);
     }, 300);
   });
   mutationObserver.observe(target, { childList: true, subtree: true });
@@ -295,6 +321,7 @@ function sendToSidebar(message) {
 // ─── Clear selection ──────────────────────────────────────────────
 function clearSelection() {
   selectedEl = null;
+  currentLockedSelector = null; // Sprint 9: reset SPA tracking
   hideRing();
   hideEscHint();
   sendToSidebar({ type: "ELEMENT_DESELECTED" });
@@ -347,6 +374,7 @@ function onClick(e) {
   if (!selector) return;
 
   selectedEl = target;
+  currentLockedSelector = selector; // Sprint 9: track for SPA resilience
   setRingMode("selected");
   positionRing(target);
   showEscHint();
