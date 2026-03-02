@@ -56,7 +56,6 @@ let activeFilter          = "all";
 let ignoreNextDeselect    = false;
 let pendingElementSelector = null;
 let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
-let briefMode             = "self-review"; // "self-review" | "user-interview" — session
 let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
 
 // ─── DOM refs ──────────────────────────────────────────────────
@@ -110,8 +109,6 @@ const settingsClearAllBtn = document.getElementById("settings-clear-all");
 const settingsVersionEl  = document.getElementById("settings-version");
 const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
-const modeSelfBtn        = document.getElementById("mode-self");
-const modeInterviewBtn   = document.getElementById("mode-interview");
 const briefSortRadios    = document.querySelectorAll("input[name='brief-sort']");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
@@ -293,14 +290,6 @@ filterTabEls.forEach((tab) => {
   });
 });
 
-// ─── Mode selector (Sprint 8 F11) ─────────────────────────────
-[modeSelfBtn, modeInterviewBtn].forEach((btn) => {
-  btn.addEventListener("click", () => {
-    briefMode = btn.dataset.mode;
-    modeSelfBtn.classList.toggle("mode-btn--active", briefMode === "self-review");
-    modeInterviewBtn.classList.toggle("mode-btn--active", briefMode === "user-interview");
-  });
-});
 
 // ─── Helpers ───────────────────────────────────────────────────
 function generateId() {
@@ -962,17 +951,13 @@ function buildBriefText() {
     .map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`)
     .join(" · ");
 
-  // Sprint 8 F11: mode-aware copy
-  const isUserInterview = briefMode === "user-interview";
-  const modeLabel    = isUserInterview ? "User Interview"  : "Self Review";
-
   const lines = [
     `# Markup — Fix Instructions`,
     ``,
     `**Project:** ${project}`,
     `**URL:** ${currentTabUrl || "Unknown"}`,
     `**Reviewed:** ${dateStr} at ${timeStr}`,
-    `**Mode:** ${modeLabel}`,
+    `**Mode:** Self Review`,
     `**Total Issues:** ${notes.length}`,
     `**Severity:** ${sevSummary}`,
     ``,
