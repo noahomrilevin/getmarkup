@@ -12,11 +12,12 @@
 <body>
   <div class="markup-sidebar">
 
-    <!-- 1 · Header: title, note count, close -->
+    <!-- 1 · Header: title, note count, settings, close -->
     <header class="markup-header">
       <span class="markup-title">Markup</span>
       <span class="markup-note-count" id="note-count">0 notes</span>
       <button class="btn-clear-all" id="clear-all" hidden>Clear all</button>
+      <button class="icon-btn" id="settings-btn" aria-label="Settings">⚙</button>
       <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
     </header>
 
@@ -33,7 +34,10 @@
       <span class="viewing-url-text" id="viewing-url-text"></span>
     </div>
 
-    <!-- Filter tabs (part of notes view) -->
+    <!-- Storage quota warning (Sprint 8 F4) -->
+    <div class="storage-quota-warning" id="storage-quota-warning" hidden></div>
+
+    <!-- Filter tabs -->
     <div class="filter-tabs" id="filter-tabs">
       <button class="filter-tab filter-tab--active" data-filter="all">All</button>
       <button class="filter-tab" data-filter="critical">Critical</button>
@@ -54,7 +58,7 @@
       <button class="clear-confirm__no" id="clear-confirm-no">Cancel</button>
     </div>
 
-    <!-- Brief output panel (shown when Generate Brief is clicked) -->
+    <!-- Brief output panel -->
     <div class="brief-panel" id="brief-output" hidden>
       <div class="brief-panel__toolbar">
         <button class="brief-back-link" id="close-brief">← Back to Notes</button>
@@ -66,20 +70,25 @@
         <p class="brief-generating__text">Building brief…</p>
       </div>
       <pre class="brief-panel__content" id="brief-content"></pre>
-      <div class="brief-panel__footer">
+      <div class="brief-panel__footer" id="brief-panel-footer">
         <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
         <button class="btn-copy-brief" id="download-brief">Download .md</button>
       </div>
+      <!-- Sprint 8 F1: Past Briefs collapsible section -->
+      <details class="brief-history-details" id="brief-history-details">
+        <summary class="brief-history-summary" id="brief-history-summary">Past Briefs</summary>
+        <div class="brief-history-items" id="brief-history-items"></div>
+      </details>
     </div>
 
-    <!-- Note pending prompt — shown when selecting new element with unsaved text -->
+    <!-- Note pending prompt -->
     <div class="note-pending-prompt" id="note-pending-prompt" hidden>
       <span class="note-pending-prompt__msg">Save note before switching?</span>
       <button class="note-pending-prompt__save" id="note-pending-save">Save</button>
       <button class="note-pending-prompt__discard" id="note-pending-discard">Discard</button>
     </div>
 
-    <!-- 4–6 · Note form: selector row, type picker, severity picker, textarea -->
+    <!-- 4–6 · Note form -->
     <div class="markup-form-area">
       <form class="note-form" id="note-form" autocomplete="off">
         <div class="selector-row">
@@ -117,24 +126,79 @@
         ></textarea>
       </form>
 
-      <!-- 7 · Save row: button (half-width, left) + shortcut hint (half-width, right) -->
       <div class="save-row">
         <button class="btn-save" type="button" id="save-note">Save Note</button>
         <span class="save-hint">Cmd+Enter to save</span>
       </div>
     </div>
 
+    <!-- Sprint 8 F11: Mode selector (Self Review / User Interview) -->
+    <div class="mode-selector" id="mode-selector">
+      <button class="mode-btn mode-btn--active" data-mode="self-review" id="mode-self">Self Review</button>
+      <button class="mode-btn" data-mode="user-interview" id="mode-interview">User Interview</button>
+    </div>
+
     <!-- 8 · Generate Brief -->
-    <div class="markup-actions">
+    <div class="markup-actions" id="markup-actions">
       <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
         Generate Brief ↗
       </button>
     </div>
 
     <!-- 9–11 · Divider + toggle + activation hint -->
-    <div class="markup-toggle-section">
+    <div class="markup-toggle-section" id="markup-toggle-section">
       <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="Toggle element selection mode">Elements OFF</button>
       <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
+    </div>
+
+    <!-- Sprint 8 F10: Settings panel (replaces main view when open) -->
+    <div class="settings-panel" id="settings-panel" hidden>
+      <div class="settings-panel__toolbar">
+        <button class="brief-back-link" id="close-settings">← Back</button>
+        <span class="settings-panel__title">Settings</span>
+      </div>
+      <div class="settings-panel__body">
+
+        <!-- Brief Sort -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Brief Sort</h3>
+          <label class="settings-radio">
+            <input type="radio" name="brief-sort" value="severity" checked />
+            <span>Severity-grouped</span>
+          </label>
+          <label class="settings-radio">
+            <input type="radio" name="brief-sort" value="chronological" />
+            <span>Chronological</span>
+          </label>
+        </section>
+
+        <!-- Export Notes -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Export Notes</h3>
+          <div class="settings-section__actions">
+            <button class="btn-settings-action" id="export-json">Download JSON</button>
+            <button class="btn-settings-action" id="export-csv">Download CSV</button>
+          </div>
+        </section>
+
+        <!-- Storage -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Storage</h3>
+          <div class="storage-usage">
+            <span class="storage-usage__text" id="storage-usage-text">Checking…</span>
+            <div class="storage-usage__bar">
+              <div class="storage-usage__fill" id="storage-usage-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <button class="btn-settings-danger" id="settings-clear-all">Clear all notes for this page</button>
+        </section>
+
+        <!-- Version -->
+        <section class="settings-section settings-section--footer">
+          <span class="settings-version" id="settings-version"></span>
+        </section>
+
+      </div>
     </div>
 
     <!-- Toast notification -->
@@ -144,7 +208,6 @@
     <div class="markup-version-footer">
       <span class="markup-version-footer__text" id="version-text"></span>
     </div>
-
 
   </div>
 

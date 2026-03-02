@@ -561,6 +561,7 @@ html, body {
 .brief-panel__toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid rgba(250, 248, 243, 0.1);
   flex-shrink: 0;
@@ -1067,4 +1068,439 @@ html, body {
   letter-spacing: 0.1em;
   color: var(--slate);
   opacity: 0.5;
+}
+
+/* ─── Brief history toggle button ─────────────────────────────── */
+.brief-history-toggle {
+  background: transparent;
+  border: 1px solid rgba(250, 248, 243, 0.2);
+  color: rgba(250, 248, 243, 0.5);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.brief-history-toggle:hover {
+  color: var(--warm-white);
+  border-color: rgba(250, 248, 243, 0.4);
+}
+
+/* ─── Brief history list ──────────────────────────────────────── */
+.brief-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.brief-history-empty {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  color: rgba(250, 248, 243, 0.35);
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.brief-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid rgba(250, 248, 243, 0.1);
+  border-radius: var(--radius-m);
+  background: rgba(250, 248, 243, 0.04);
+  transition: background 0.15s ease;
+}
+
+.brief-history-item:hover {
+  background: rgba(250, 248, 243, 0.07);
+}
+
+.brief-history-item__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brief-history-item__date {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  color: var(--warm-white);
+}
+
+.brief-history-item__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(250, 248, 243, 0.4);
+}
+
+.btn-history-view {
+  background: transparent;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--gold);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-history-view:hover {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Sprint 8 — New feature styles
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── F4: Storage quota warning strip ────────────────────────── */
+.storage-quota-warning {
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.storage-quota-warning--warn {
+  background: var(--color-warning);
+  color: var(--color-warning-fg);
+  border-bottom: 1px solid rgba(107, 66, 0, 0.2);
+}
+
+.storage-quota-warning--critical {
+  background: var(--color-error);
+  color: var(--color-error-fg);
+  border-bottom: 1px solid rgba(217, 60, 21, 0.2);
+}
+
+/* ─── F5: Element label chip on note card ─────────────────────── */
+.note-element-label {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  border-radius: var(--radius-m);
+  padding: 1px var(--space-xs);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ─── F7: Note card timestamp + meta-right ───────────────────── */
+.note-card__meta-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.note-card__timestamp {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ─── F1: Brief history collapsible <details> ─────────────────── */
+.brief-history-details {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(250, 248, 243, 0.1);
+}
+
+.brief-history-summary {
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(250, 248, 243, 0.45);
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  transition: color 0.2s ease;
+}
+
+/* Hide default browser disclosure triangle */
+.brief-history-summary::-webkit-details-marker { display: none; }
+.brief-history-summary::marker               { display: none; }
+
+.brief-history-summary:hover {
+  color: rgba(250, 248, 243, 0.75);
+}
+
+.brief-history-details[open] .brief-history-summary {
+  color: rgba(250, 248, 243, 0.65);
+}
+
+.brief-history-items {
+  padding: 0 var(--space-sm) var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* The __counts span (note count + severity summary) */
+.brief-history-item__counts {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(250, 248, 243, 0.4);
+}
+
+/* Actions group inside each brief history item */
+.brief-history-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+/* Trash / delete button for brief history entries */
+.btn-history-delete {
+  background: transparent;
+  border: none;
+  color: rgba(250, 248, 243, 0.3);
+  font-size: var(--size-sm);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-m);
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.btn-history-delete:hover {
+  color: var(--destructive);
+}
+
+/* ─── F10: Settings panel ─────────────────────────────────────── */
+.settings-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.settings-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--paper);
+}
+
+.settings-panel__title {
+  font-family: var(--font-mono);
+  font-size: var(--size-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.settings-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.settings-section__title {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.settings-section__actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.settings-section--footer {
+  margin-top: auto;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--size-sm);
+  color: var(--foreground);
+}
+
+.settings-radio input[type="radio"] {
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+.btn-settings-action {
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-settings-action:hover {
+  background: var(--secondary);
+  border-color: rgba(201, 168, 76, 0.4);
+}
+
+.btn-settings-danger {
+  background: transparent;
+  color: var(--destructive);
+  border: 1px solid rgba(217, 60, 21, 0.35);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  margin-top: var(--space-xs);
+}
+
+.btn-settings-danger:hover {
+  background: var(--destructive);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Storage usage bar */
+.storage-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.storage-usage__text {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.storage-usage__bar {
+  height: 4px;
+  background: var(--muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.storage-usage__fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  max-width: 100%;
+}
+
+.settings-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+/* Override brief-back-link colors inside settings (light bg) */
+.settings-panel .brief-back-link {
+  color: var(--muted-foreground);
+}
+
+.settings-panel .brief-back-link:hover {
+  color: var(--foreground);
+}
+
+/* ─── F11: Mode selector ─────────────────────────────────────── */
+.mode-selector {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-md);
+  border-top: 1px solid var(--border);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mode-btn:hover {
+  color: var(--foreground);
+  border-color: rgba(201, 168, 76, 0.4);
+}
+
+.mode-btn--active {
+  background: var(--deep-blue);
+  color: var(--gold);
+  border-color: var(--deep-blue);
 }

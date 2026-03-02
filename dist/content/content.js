@@ -679,6 +679,7 @@
   var RING_LABEL_ID = "__markup-ring-label";
   var ESC_HINT_ID = "__markup-esc-hint";
   var CURSOR_STYLE_ID = "__markup-cursor";
+  var BADGE_CLASS = "__markup-badge";
   var HIGHLIGHT_COLOR = "#FF8400";
   var ring = null;
   var selectedEl = null;
@@ -687,6 +688,9 @@
   var reposTimeout = null;
   window.__markupReady = true;
   window.__markupActive = false;
+  var badgeElements = [];
+  var currentAnnotatedNotes = [];
+  var badgeScrollRAF = null;
   function injectCursorOverride() {
     if (document.getElementById(CURSOR_STYLE_ID)) return;
     const style = document.createElement("style");
@@ -820,6 +824,95 @@
       return null;
     }
   }
+  function getElementLabel(el) {
+    const ariaLabel = el.getAttribute("aria-label");
+    if (ariaLabel && ariaLabel.trim()) {
+      return ariaLabel.trim().slice(0, 40);
+    }
+    const alt = el.getAttribute("alt");
+    if (alt && alt.trim()) {
+      return alt.trim().slice(0, 40);
+    }
+    const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
+    if (text) {
+      return text.length > 40 ? text.slice(0, 40) + "\u2026" : text;
+    }
+    const cls = typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\s+/)[0] : "";
+    return el.tagName.toLowerCase() + cls;
+  }
+  function clearAllBadges() {
+    document.querySelectorAll("." + BADGE_CLASS).forEach((el) => el.remove());
+    badgeElements = [];
+  }
+  function repositionBadges() {
+    badgeElements.forEach(({ el, badge }) => {
+      try {
+        const rect = el.getBoundingClientRect();
+        badge.style.top = rect.top - 9 + "px";
+        badge.style.left = rect.left + rect.width - 9 + "px";
+      } catch {
+      }
+    });
+  }
+  function renderBadges() {
+    if (!isActive) return;
+    clearAllBadges();
+    currentAnnotatedNotes.forEach((note, index) => {
+      if (!note.selector) return;
+      let el;
+      try {
+        el = document.querySelector(note.selector);
+      } catch {
+        return;
+      }
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const badge = document.createElement("div");
+      badge.className = BADGE_CLASS;
+      badge.textContent = String(index + 1);
+      badge.dataset.noteId = note.id;
+      Object.assign(badge.style, {
+        all: "initial",
+        position: "fixed",
+        top: rect.top - 9 + "px",
+        left: rect.left + rect.width - 9 + "px",
+        width: "18px",
+        height: "18px",
+        borderRadius: "50%",
+        background: "#C9A84C",
+        color: "#FFFFFF",
+        fontSize: "10px",
+        fontFamily: "monospace",
+        fontWeight: "bold",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: "2147483647",
+        cursor: "pointer",
+        userSelect: "none",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+        lineHeight: "1",
+        pointerEvents: "auto"
+      });
+      badge.addEventListener("mouseenter", () => {
+        sendToSidebar({ type: "BADGE_HOVERED", noteId: note.id });
+      });
+      badge.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        sendToSidebar({ type: "BADGE_CLICKED", noteId: note.id });
+      });
+      document.documentElement.appendChild(badge);
+      badgeElements.push({ noteId: note.id, el, badge });
+    });
+  }
+  function onBadgeScroll() {
+    if (badgeScrollRAF) return;
+    badgeScrollRAF = requestAnimationFrame(() => {
+      badgeScrollRAF = null;
+      repositionBadges();
+    });
+  }
   function sendToSidebar(message) {
     try {
       chrome.runtime.sendMessage(message).catch(() => {
@@ -839,7 +932,7 @@
   function onMouseover(e) {
     if (!isActive || selectedEl) return;
     const target = e.target;
-    if (target === ring || target === document.documentElement || target === document.body) {
+    if (target === ring || target === document.documentElement || target === document.body || target.classList.contains(BADGE_CLASS)) {
       return;
     }
     setRingMode("hover");
@@ -858,6 +951,7 @@
     if (!isActive) return;
     const target = e.target;
     if (target === ring || target.id === RING_ID) return;
+    if (target.classList.contains(BADGE_CLASS)) return;
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -877,10 +971,12 @@
       "| selector:",
       selector
     );
-    sendToSidebar({ type: "ELEMENT_SELECTED", selector });
+    const elementLabel = getElementLabel(target);
+    sendToSidebar({ type: "ELEMENT_SELECTED", selector, elementLabel });
   }
   function onScroll() {
     if (selectedEl) positionRing(selectedEl);
+    if (badgeElements.length > 0) onBadgeScroll();
   }
   function onKeydown(e) {
     if (e.key === "Escape") clearSelection();
@@ -899,6 +995,7 @@
     document.addEventListener("click", onClick, { capture: true });
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     document.addEventListener("keydown", onKeydown);
+    if (currentAnnotatedNotes.length > 0) renderBadges();
     sendToSidebar({ type: "MARKUP_ACTIVATED" });
   }
   function deactivate() {
@@ -910,6 +1007,7 @@
     hideEscHint();
     removeCursorOverride();
     stopMutationObserver();
+    clearAllBadges();
     document.removeEventListener("mouseover", onMouseover, { capture: true });
     document.removeEventListener("mouseout", onMouseout, { capture: true });
     document.removeEventListener("click", onClick, { capture: true });
@@ -921,5 +1019,25 @@
     if (message.type === "MARKUP_ACTIVATE") activate();
     if (message.type === "MARKUP_DEACTIVATE") deactivate();
     if (message.type === "MARKUP_DESELECT") clearSelection();
+    if (message.type === "NOTES_UPDATED") {
+      currentAnnotatedNotes = message.notes || [];
+      if (isActive) renderBadges();
+    }
+    if (message.type === "HIGHLIGHT_ELEMENT") {
+      if (!isActive || selectedEl) return;
+      try {
+        const el = document.querySelector(message.selector);
+        if (el) {
+          setRingMode("hover");
+          positionRing(el);
+        }
+      } catch {
+      }
+    }
+    if (message.type === "HIGHLIGHT_ELEMENT_END") {
+      if (!isActive || selectedEl) return;
+      hideRing();
+      sendToSidebar({ type: "ELEMENT_HOVER_END" });
+    }
   });
 })();

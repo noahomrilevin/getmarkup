@@ -1,4 +1,4 @@
-// Markup — Sidebar Script
+// Markup — Sidebar Script — Sprint 8
 
 console.log("Markup: sidebar ready");
 
@@ -31,14 +31,19 @@ const SEVERITY_CONFIG = {
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 
+// ─── Storage quota constants (Sprint 8 F4) ─────────────────────
+const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
+const QUOTA_BLOCK_BYTES = 4.8 * 1024 * 1024; // 4.8 MB — block saves
+
 // ─── State ─────────────────────────────────────────────────────
 let currentSelector       = null;
+let currentElementLabel   = null; // Sprint 8 F5: human-readable label
 let currentNoteId         = null;
 let notes                 = [];
 let currentTabId          = null;
-let currentWindowId       = null;   // Bug 1: filter onActivated to our window
+let currentWindowId       = null;
 let currentTabUrl         = "";
-let currentNoteUrl        = "";     // normalized URL used as storage key
+let currentNoteUrl        = "";
 let tabTitle              = "";
 let sessionTitle          = "";
 let markupActive          = false;
@@ -48,9 +53,12 @@ let markupEverActivated   = false;
 const undoStack           = [];
 const redoStack           = [];
 let toastTimeout          = null;
-let activeFilter          = "all";  // severity filter state
-let ignoreNextDeselect    = false;  // Bug 4: prevent clearSelectorBtn from triggering flushSave
-let pendingElementSelector = null;  // Bug 7: selector waiting when user has unsaved text
+let activeFilter          = "all";
+let ignoreNextDeselect    = false;
+let pendingElementSelector = null;
+let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
+let briefMode             = "self-review"; // "self-review" | "user-interview" — session
+let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
 
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
@@ -60,7 +68,7 @@ const noteCountEl        = document.getElementById("note-count");
 const notesList          = document.getElementById("notes-list");
 const emptyState         = document.getElementById("empty-state");
 const selectorDisplay    = document.getElementById("selector-display");
-const selectorRow        = document.querySelector(".selector-row");   // Bug 5
+const selectorRow        = document.querySelector(".selector-row");
 const clearSelectorBtn   = document.getElementById("clear-selector");
 const noteInput          = document.getElementById("note-input");
 const generateBtn        = document.getElementById("generate-brief");
@@ -75,27 +83,75 @@ const briefGenerating    = document.getElementById("brief-generating");
 const copyBriefBtn       = document.getElementById("copy-brief");
 const downloadBriefBtn   = document.getElementById("download-brief");
 const closeBriefBtn      = document.getElementById("close-brief");
+const briefHistoryDetails = document.getElementById("brief-history-details");
+const briefHistorySummary = document.getElementById("brief-history-summary");
+const briefHistoryItems  = document.getElementById("brief-history-items");
 const formArea           = document.querySelector(".markup-form-area");
 const clearAllBtn        = document.getElementById("clear-all");
 const clearConfirmEl     = document.getElementById("clear-confirm");
 const clearConfirmMsgEl  = document.getElementById("clear-confirm-msg");
 const clearConfirmYesBtn = document.getElementById("clear-confirm-yes");
 const clearConfirmNoBtn  = document.getElementById("clear-confirm-no");
-const sessionTitleInput    = document.getElementById("session-title");
-const sessionTitleWrap     = document.getElementById("session-title-wrap");
-const filterTabsEl         = document.getElementById("filter-tabs");
-const notePendingPrompt    = document.getElementById("note-pending-prompt");
-const notePendingSaveBtn   = document.getElementById("note-pending-save");
+const sessionTitleInput  = document.getElementById("session-title");
+const sessionTitleWrap   = document.getElementById("session-title-wrap");
+const filterTabsEl       = document.getElementById("filter-tabs");
+const notePendingPrompt  = document.getElementById("note-pending-prompt");
+const notePendingSaveBtn = document.getElementById("note-pending-save");
 const notePendingDiscardBtn = document.getElementById("note-pending-discard");
-const viewingUrlText       = document.getElementById("viewing-url-text");
+const viewingUrlText     = document.getElementById("viewing-url-text");
+const storageQuotaWarning = document.getElementById("storage-quota-warning");
+const markupActionsEl    = document.getElementById("markup-actions");
+const toggleSectionEl    = document.getElementById("markup-toggle-section");
+const settingsBtn        = document.getElementById("settings-btn");
+const settingsPanel      = document.getElementById("settings-panel");
+const closeSettingsBtn   = document.getElementById("close-settings");
+const storageUsageText   = document.getElementById("storage-usage-text");
+const storageUsageFill   = document.getElementById("storage-usage-fill");
+const settingsClearAllBtn = document.getElementById("settings-clear-all");
+const settingsVersionEl  = document.getElementById("settings-version");
+const exportJsonBtn      = document.getElementById("export-json");
+const exportCsvBtn       = document.getElementById("export-csv");
+const modeSelfBtn        = document.getElementById("mode-self");
+const modeInterviewBtn   = document.getElementById("mode-interview");
+const briefSortRadios    = document.querySelectorAll("input[name='brief-sort']");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
 
-// ─── URL normalization (Bug 1 + Bug 8) ─────────────────────────
-// Strip hash and trailing slash so notes follow the page, not the tab.
+// ─── URL normalization ─────────────────────────────────────────
 function normalizeUrl(url) {
   return url.split("#")[0].replace(/\/$/, "");
+}
+
+// ─── Sprint 8 F9: Safe storage wrappers ────────────────────────
+async function safeGet(keyOrNull, fallback = null) {
+  try {
+    return await new Promise((resolve, reject) => {
+      chrome.storage.local.get(keyOrNull, (data) => {
+        if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
+        if (typeof keyOrNull === "string") resolve(data[keyOrNull] ?? fallback);
+        else resolve(data ?? fallback);
+      });
+    });
+  } catch (err) {
+    console.error("Markup: storage.get failed", { keyOrNull, err });
+    showToast("Storage error — data may be incomplete.");
+    return fallback;
+  }
+}
+
+async function safeSet(data) {
+  try {
+    await new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
+        resolve();
+      });
+    });
+  } catch (err) {
+    console.error("Markup: storage.set failed", { err });
+    showToast("Something went wrong — your notes are safe.");
+  }
 }
 
 // ─── Toggle state ──────────────────────────────────────────────
@@ -113,12 +169,12 @@ function setToggleState(active) {
     toggleBtn.textContent = "Elements OFF";
     toggleBtn.classList.remove("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "false");
-    deactivateReset(); // Bug 6: preserves noteInput
+    deactivateReset();
   }
   updateEmptyState();
 }
 
-// ─── Toggle send (shared by header button + empty state button) ─
+// ─── Toggle send ───────────────────────────────────────────────
 async function sendToggle() {
   const tabs = await new Promise((resolve) =>
     chrome.tabs.query({ active: true, currentWindow: true }, resolve)
@@ -127,14 +183,8 @@ async function sendToggle() {
   if (!tab?.id) return;
 
   const url = tab.url || "";
-
-  // Always clear any stale hint before evaluating the new page context.
   activationHint.hidden = true;
 
-  console.log("Markup: sendToggle tabId=", tab.id, "url=", url);
-
-  // Bug 2: file:// is NOT restricted — it's a core Markup use case.
-  // The manifest already declares file_urls permission.
   const isRestricted =
     url.startsWith("chrome://") ||
     url.startsWith("chrome-extension://") ||
@@ -147,7 +197,6 @@ async function sendToggle() {
     return;
   }
 
-  // Bug 2: include file:// as a normal injectable page
   const isNormalPage =
     url.startsWith("http://") ||
     url.startsWith("https://") ||
@@ -160,14 +209,11 @@ async function sendToggle() {
       func: () => window.__markupReady === true,
     });
     ready = results?.[0]?.result === true;
-    console.log("Markup: ping result=", ready);
   } catch (err) {
-    console.log("Markup: ping failed:", err?.message);
     ready = false;
   }
 
   if (!ready && isNormalPage) {
-    console.log("Markup: content script not ready, attempting direct injection");
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -176,16 +222,13 @@ async function sendToggle() {
       await new Promise((r) => setTimeout(r, 500));
       chrome.tabs.sendMessage(tab.id, { type: "MARKUP_ACTIVATE" });
     } catch (injErr) {
-      console.log("Markup: injection failed:", injErr?.message);
       activationHint.textContent = "Try refreshing the page.";
       activationHint.hidden = false;
     }
     return;
   }
 
-  if (!ready) {
-    return;
-  }
+  if (!ready) return;
 
   markupEverActivated = true;
   const msgType = markupActive ? "MARKUP_DEACTIVATE" : "MARKUP_ACTIVATE";
@@ -195,7 +238,6 @@ async function sendToggle() {
 toggleBtn.addEventListener("click", sendToggle);
 
 // ─── Close button ──────────────────────────────────────────────
-// Fix 6: deactivate content script before closing so ring and listeners are cleaned up
 closeBtn.addEventListener("click", () => {
   if (markupActive && currentTabId) {
     try { chrome.tabs.sendMessage(currentTabId, { type: "MARKUP_DEACTIVATE" }); }
@@ -217,16 +259,13 @@ function updateEmptyState() {
     const heading = document.createElement("p");
     heading.className = "empty-state__heading";
     heading.textContent = "Ready to annotate?";
-
     const text = document.createElement("p");
     text.className = "empty-state__text";
     text.textContent = "Turn Markup on to start selecting elements.";
-
     const btn = document.createElement("button");
     btn.className = "btn-activate";
     btn.textContent = "Turn Markup On";
     btn.addEventListener("click", sendToggle);
-
     emptyState.append(heading, text, btn);
   } else {
     const text = document.createElement("p");
@@ -238,16 +277,12 @@ function updateEmptyState() {
 
 // ─── Type picker ───────────────────────────────────────────────
 typeButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    setTypePicker(btn.dataset.type);
-  });
+  btn.addEventListener("click", () => { setTypePicker(btn.dataset.type); });
 });
 
 // ─── Severity picker ───────────────────────────────────────────
 severityButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    setSeverityPicker(btn.dataset.severity);
-  });
+  btn.addEventListener("click", () => { setSeverityPicker(btn.dataset.severity); });
 });
 
 // ─── Filter tabs ───────────────────────────────────────────────
@@ -256,6 +291,15 @@ filterTabEls.forEach((tab) => {
     activeFilter = tab.dataset.filter;
     filterTabEls.forEach((t) => t.classList.toggle("filter-tab--active", t.dataset.filter === activeFilter));
     renderNotesList();
+  });
+});
+
+// ─── Mode selector (Sprint 8 F11) ─────────────────────────────
+[modeSelfBtn, modeInterviewBtn].forEach((btn) => {
+  btn.addEventListener("click", () => {
+    briefMode = btn.dataset.mode;
+    modeSelfBtn.classList.toggle("mode-btn--active", briefMode === "self-review");
+    modeInterviewBtn.classList.toggle("mode-btn--active", briefMode === "user-interview");
   });
 });
 
@@ -284,9 +328,7 @@ function setTypePicker(type) {
   });
 }
 
-function resetTypePicker() {
-  setTypePicker("general");
-}
+function resetTypePicker() { setTypePicker("general"); }
 
 function getActiveSeverity() {
   return document.querySelector(".severity-btn--active")?.dataset.severity || "medium";
@@ -300,67 +342,66 @@ function setSeverityPicker(severity) {
   });
 }
 
-function resetSeverityPicker() {
-  setSeverityPicker("medium");
+function resetSeverityPicker() { setSeverityPicker("medium"); }
+
+// ─── Sprint 8 F7: Relative timestamps ─────────────────────────
+function getRelativeTime(ts) {
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60000)      return "just now";
+  if (diff < 3600000)    return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000)   return `${Math.floor(diff / 3600000)}h ago`;
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// ─── Clear selector visibility ─────────────────────────────────
+function refreshTimestamps() {
+  document.querySelectorAll(".note-card__timestamp[data-ts]").forEach((el) => {
+    el.textContent = getRelativeTime(Number(el.dataset.ts));
+  });
+}
+
+// ─── Clear selector/all visibility ────────────────────────────
 function updateClearSelectorVisibility() {
   clearSelectorBtn.hidden = !currentSelector;
 }
 
-// ─── Clear all visibility ──────────────────────────────────────
 function updateClearAllVisibility() {
   clearAllBtn.hidden = notes.length === 0;
 }
 
-// ─── Storage — notes (Bug 1: keyed by normalizedUrl, not tabId) ─
+// ─── Storage — notes ──────────────────────────────────────────
 function loadNotes() {
   const key = `markup_notes_${currentNoteUrl}`;
-  return new Promise((resolve) => {
-    chrome.storage.local.get(key, (data) => {
-      resolve(data[key] || []);
-    });
-  });
+  return safeGet(key, []);
 }
 
-// Fix 1: maintain a flat cross-URL index so notes are never lost across navigation
 async function persistAllNotes() {
   if (!currentNoteUrl) return;
   const allKey = "markup_all_notes";
-  const existing = await new Promise((resolve) =>
-    chrome.storage.local.get(allKey, (data) => resolve(data[allKey] || []))
-  );
-  // Replace this URL's notes, keep all others
+  const existing = await safeGet(allKey, []);
   const otherNotes = existing.filter((n) => n.url !== currentNoteUrl);
-  chrome.storage.local.set({ [allKey]: [...otherNotes, ...notes] });
+  await safeSet({ [allKey]: [...otherNotes, ...notes] });
 }
 
-function persistNotes() {
-  if (!currentNoteUrl) return Promise.resolve();
+async function persistNotes() {
+  if (!currentNoteUrl) return;
   const key = `markup_notes_${currentNoteUrl}`;
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: notes }, () => {
-      resolve();
-      persistAllNotes(); // fire-and-forget global index sync
-    });
-  });
+  await safeSet({ [key]: notes });
+  persistAllNotes(); // fire-and-forget
+  updateBadge();     // Sprint 8 F2: sync badge count
+  await checkStorageQuota(); // Sprint 8 F4: check quota after every write
 }
 
-// ─── Storage — session title (Bug 8: keyed by normalizedUrl) ───
+// ─── Storage — session title ───────────────────────────────────
 function loadSessionTitle() {
   const key = `markup_session_${currentNoteUrl}`;
-  return new Promise((resolve) => {
-    chrome.storage.local.get(key, (data) => {
-      resolve(key in data ? data[key] : null);
-    });
-  });
+  return safeGet(key, null);
 }
 
 function persistSessionTitle(title) {
   if (!currentNoteUrl) return;
-  const key = `markup_session_${currentNoteUrl}`;
-  chrome.storage.local.set({ [key]: title });
+  safeSet({ [`markup_session_${currentNoteUrl}`]: title });
 }
 
 sessionTitleInput.addEventListener("input", () => {
@@ -368,22 +409,148 @@ sessionTitleInput.addEventListener("input", () => {
   persistSessionTitle(sessionTitle);
 });
 
-// ─── Storage — backup (Bug 9) ──────────────────────────────────
-// Written before any destructive clear. Keeps the last 3 snapshots per URL.
+// ─── Storage — backup ─────────────────────────────────────────
 async function writeBackup() {
   if (!currentNoteUrl || notes.length === 0) return;
   const backupKey = `markup_backup_${currentNoteUrl}`;
-  const existing = await new Promise((resolve) =>
-    chrome.storage.local.get(backupKey, (data) => resolve(data[backupKey] || []))
-  );
+  const existing = await safeGet(backupKey, []);
   const backup = { timestamp: Date.now(), notes: JSON.parse(JSON.stringify(notes)) };
   const updated = [...existing, backup].slice(-3);
-  await new Promise((resolve) => chrome.storage.local.set({ [backupKey]: updated }, resolve));
+  await safeSet({ [backupKey]: updated });
   console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
 }
 
-// ─── Filter tab count badges (Fix 3) ───────────────────────────
-// Updates each tab to show "(n)" after its label. Gold for 1+, slate for 0.
+// ─── Sprint 8 F1: Brief history storage ───────────────────────
+// Saves last 10 generated briefs per URL with severity summary for each.
+function loadBriefs() {
+  const key = `markup_briefs_${currentNoteUrl}`;
+  return safeGet(key, []);
+}
+
+async function saveBrief(markdown) {
+  if (!currentNoteUrl) return;
+  const key = `markup_briefs_${currentNoteUrl}`;
+  const existing = await loadBriefs();
+
+  // Build severity summary string: "2 Critical · 1 High"
+  const sevSummary = SEVERITY_ORDER
+    .map((s) => ({ s, n: notes.filter((n) => (n.severity || "medium") === s).length }))
+    .filter(({ n }) => n > 0)
+    .map(({ s, n }) => `${n} ${SEVERITY_CONFIG[s].label}`)
+    .join(" · ") || null;
+
+  const entry = {
+    id: generateId(),
+    timestamp: Date.now(),
+    noteCount: notes.length,
+    sevSummary,
+    markdown,
+  };
+  const updated = [...existing, entry].slice(-10);
+  await safeSet({ [key]: updated });
+  await renderBriefHistory(); // update the collapsible list
+}
+
+async function deleteBriefEntry(id) {
+  const key = `markup_briefs_${currentNoteUrl}`;
+  const existing = await loadBriefs();
+  const updated = existing.filter((b) => b.id !== id);
+  await safeSet({ [key]: updated });
+  await renderBriefHistory();
+}
+
+async function renderBriefHistory() {
+  if (!briefHistoryItems) return;
+  briefHistoryItems.innerHTML = "";
+
+  const briefs = await loadBriefs();
+
+  // Update summary label
+  if (briefHistorySummary) {
+    briefHistorySummary.textContent = briefs.length > 0
+      ? `Past Briefs (${briefs.length})`
+      : "Past Briefs";
+  }
+
+  if (briefs.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "brief-history-empty";
+    empty.textContent = "No past briefs for this page yet.";
+    briefHistoryItems.appendChild(empty);
+    return;
+  }
+
+  // Newest first
+  [...briefs].reverse().forEach((brief) => {
+    const item = document.createElement("div");
+    item.className = "brief-history-item";
+
+    const dateStr = new Date(brief.timestamp).toLocaleString("en-US", {
+      month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit",
+    });
+    const countStr = `${brief.noteCount} note${brief.noteCount === 1 ? "" : "s"}`;
+    const sevStr = brief.sevSummary ? ` · ${brief.sevSummary}` : "";
+
+    item.innerHTML = `
+      <div class="brief-history-item__meta">
+        <span class="brief-history-item__date">${escapeHtml(dateStr)}</span>
+        <span class="brief-history-item__counts">${escapeHtml(countStr + sevStr)}</span>
+      </div>
+      <div class="brief-history-item__actions">
+        <button class="btn-history-view">View</button>
+        <button class="btn-history-delete" aria-label="Delete this brief">🗑</button>
+      </div>
+    `;
+
+    item.querySelector(".btn-history-view").addEventListener("click", () => {
+      briefContent.textContent = brief.markdown;
+      showToast("Brief restored.");
+    });
+
+    item.querySelector(".btn-history-delete").addEventListener("click", async () => {
+      await deleteBriefEntry(brief.id);
+      showToast("Brief deleted.");
+    });
+
+    briefHistoryItems.appendChild(item);
+  });
+}
+
+// ─── Sprint 8 F2: Action badge ─────────────────────────────────
+function updateBadge() {
+  const count = notes.length;
+  chrome.runtime.sendMessage({
+    type: "SET_BADGE",
+    count,
+    tabId: currentTabId,
+  }).catch(() => {}); // background may be sleeping
+}
+
+// ─── Sprint 8 F4: Storage quota check ─────────────────────────
+async function checkStorageQuota() {
+  try {
+    const bytesUsed = await new Promise((resolve) =>
+      chrome.storage.local.getBytesInUse(null, resolve)
+    );
+    if (bytesUsed >= QUOTA_BLOCK_BYTES) {
+      storageQuotaWarning.className = "storage-quota-warning storage-quota-warning--critical";
+      storageQuotaWarning.textContent = "Storage full — export or clear notes before saving.";
+      storageQuotaWarning.hidden = false;
+    } else if (bytesUsed >= QUOTA_WARN_BYTES) {
+      storageQuotaWarning.className = "storage-quota-warning storage-quota-warning--warn";
+      storageQuotaWarning.textContent = "Storage almost full — export your notes or clear old sessions.";
+      storageQuotaWarning.hidden = false;
+    } else {
+      storageQuotaWarning.hidden = true;
+    }
+    return bytesUsed;
+  } catch {
+    return 0;
+  }
+}
+
+// ─── Filter tab count badges ───────────────────────────────────
 function updateFilterTabCounts() {
   const counts = {
     all:      notes.length,
@@ -406,6 +573,18 @@ function updateFilterTabCounts() {
   });
 }
 
+// ─── Sprint 8 F6: Send notes to content script for badges ─────
+function sendNotesToContentScript() {
+  if (!currentTabId) return;
+  const annotated = notes
+    .filter((n) => n.selector)
+    .map((n, i) => ({ id: n.id, selector: n.selector, index: i }));
+  chrome.tabs.sendMessage(currentTabId, {
+    type: "NOTES_UPDATED",
+    notes: annotated,
+  }).catch(() => {}); // content script may not be ready
+}
+
 // ─── Render ────────────────────────────────────────────────────
 function renderNotesList() {
   notesList.querySelectorAll(".note-card").forEach((c) => c.remove());
@@ -416,9 +595,10 @@ function renderNotesList() {
   generateBtn.disabled = count === 0;
   generateBtn.setAttribute("aria-disabled", count === 0 ? "true" : "false");
 
-  updateFilterTabCounts(); // Fix 3: keep tab counts in sync
+  updateFilterTabCounts();
   updateEmptyState();
   updateClearAllVisibility();
+  sendNotesToContentScript(); // Sprint 8 F6: update in-page badges
 
   const visible = activeFilter === "all"
     ? notes
@@ -437,8 +617,6 @@ function createNoteCard(note) {
   card.className = "note-card";
   card.dataset.noteId = note.id;
 
-  // Bug 7: only show "General note" label for the General type with no selector.
-  // For Bug/Design/Copy/Question with no element, show nothing in that area.
   let locationChip = "";
   if (note.selector) {
     locationChip = `<code class="selector-chip">${escapeHtml(note.selector)}</code>`;
@@ -446,28 +624,53 @@ function createNoteCard(note) {
     locationChip = `<span class="general-note-label">General note</span>`;
   }
 
+  // Sprint 8 F5: element label row
+  const labelChip = note.elementLabel
+    ? `<span class="note-element-label">${escapeHtml(note.elementLabel)}</span>`
+    : "";
+
+  // Sprint 8 F7: relative timestamp
+  const tsStr = getRelativeTime(note.createdAt);
+  const tsHtml = note.createdAt
+    ? `<span class="note-card__timestamp" data-ts="${note.createdAt}">${escapeHtml(tsStr)}</span>`
+    : "";
+
   card.innerHTML = `
     <div class="note-card__header">
       <div class="note-card__tags">
         <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
         <span class="note-severity-badge note-severity-badge--${escapeHtml(severity)}">${sevConfig.label}</span>
       </div>
-      <div class="note-card__actions">
-        <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
-        <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
+      <div class="note-card__meta-right">
+        ${tsHtml}
+        <div class="note-card__actions">
+          <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
+          <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
+        </div>
       </div>
     </div>
     ${locationChip}
+    ${labelChip}
     <p class="note-card__text">${escapeHtml(note.text)}</p>
   `;
 
-  card.querySelector(".edit-btn").addEventListener("click", () => {
-    enterEditMode(note);
-  });
+  card.querySelector(".edit-btn").addEventListener("click", () => { enterEditMode(note); });
+  card.querySelector(".delete-btn").addEventListener("click", () => { deleteNote(note.id); });
 
-  card.querySelector(".delete-btn").addEventListener("click", () => {
-    deleteNote(note.id);
-  });
+  // Sprint 8 F8: hover note card → temporarily highlight element in page
+  if (note.selector) {
+    card.addEventListener("mouseenter", () => {
+      if (!markupActive || !currentTabId) return;
+      chrome.tabs.sendMessage(currentTabId, {
+        type: "HIGHLIGHT_ELEMENT",
+        selector: note.selector,
+      }).catch(() => {});
+    });
+    card.addEventListener("mouseleave", () => {
+      if (!markupActive || !currentTabId) return;
+      chrome.tabs.sendMessage(currentTabId, { type: "HIGHLIGHT_ELEMENT_END" }).catch(() => {});
+    });
+  }
 
   return card;
 }
@@ -517,12 +720,17 @@ async function flushSave() {
   const text = noteInput.value.trim();
   if (!text) return;
 
+  // Sprint 8 F4: block save if storage is critically full
+  const bytesUsed = await checkStorageQuota();
+  if (bytesUsed >= QUOTA_BLOCK_BYTES) {
+    showToast("Storage full — export or clear notes first.");
+    return;
+  }
+
   const type     = getActiveType();
   const severity = getActiveSeverity();
 
   if (currentNoteId) {
-    // Bug 4: always update in place when currentNoteId is set — never insert new.
-    // Also update selector/elementName so a cleared element is reflected correctly.
     const idx = notes.findIndex((n) => n.id === currentNoteId);
     if (idx >= 0) {
       pushUndo("Edit undone");
@@ -532,19 +740,21 @@ async function flushSave() {
         severity,
         text,
         selector: currentSelector,
+        elementLabel: currentSelector ? (currentElementLabel || notes[idx].elementLabel) : null,
         elementName: currentSelector ? null : "General note",
       };
     }
   } else {
     const note = {
       id: generateId(),
-      url: currentNoteUrl,          // Fix 1: store URL so note is identifiable globally
+      url: currentNoteUrl,
       selector: currentSelector,
+      elementLabel: currentSelector ? currentElementLabel : null, // Sprint 8 F5
       elementName: currentSelector ? null : "General note",
       type,
       severity,
       text,
-      createdAt: Date.now(),
+      createdAt: Date.now(), // Sprint 8 F7
     };
     currentNoteId = note.id;
     notes.push(note);
@@ -554,14 +764,15 @@ async function flushSave() {
   renderNotesList();
 }
 
-// ─── Form reset — full (used after explicit user action: save/cancel) ──
+// ─── Form resets ───────────────────────────────────────────────
 function resetForm() {
-  currentSelector  = null;
-  currentNoteId    = null;
-  isEditing        = false;
-  editPrevSelector = null;
-  noteInput.value  = "";
-  selectorRow.hidden = true;
+  currentSelector     = null;
+  currentElementLabel = null;
+  currentNoteId       = null;
+  isEditing           = false;
+  editPrevSelector    = null;
+  noteInput.value     = "";
+  selectorRow.hidden  = true;
   selectorDisplay.textContent = "";
   saveBtn.textContent = "Save Note";
   resetTypePicker();
@@ -569,16 +780,13 @@ function resetForm() {
   updateClearSelectorVisibility();
 }
 
-// ─── Deactivation reset (Bug 6) ────────────────────────────────
-// Like resetForm but preserves noteInput so in-progress text isn't lost
-// when Markup is toggled off or the content script disconnects.
 function deactivateReset() {
-  currentSelector  = null;
-  currentNoteId    = null;
-  isEditing        = false;
-  editPrevSelector = null;
-  // noteInput.value intentionally NOT cleared
-  selectorRow.hidden = true;
+  currentSelector     = null;
+  currentElementLabel = null;
+  currentNoteId       = null;
+  isEditing           = false;
+  editPrevSelector    = null;
+  selectorRow.hidden  = true;
   selectorDisplay.textContent = "";
   saveBtn.textContent = "Save Note";
   resetTypePicker();
@@ -586,10 +794,10 @@ function deactivateReset() {
   updateClearSelectorVisibility();
 }
 
-// ─── Soft reset (keeps element active after save) ──────────────
 function softReset() {
-  currentNoteId   = null;
-  noteInput.value = "";
+  currentNoteId       = null;
+  currentElementLabel = null;
+  noteInput.value     = "";
   resetTypePicker();
   resetSeverityPicker();
   noteInput.focus();
@@ -601,6 +809,7 @@ function enterEditMode(note) {
   editPrevSelector = currentSelector;
   currentNoteId    = note.id;
   currentSelector  = note.selector;
+  currentElementLabel = note.elementLabel || null;
   noteInput.value  = note.text;
   setTypePicker(note.type);
   setSeverityPicker(note.severity || "medium");
@@ -615,6 +824,7 @@ function exitEditMode() {
   isEditing        = false;
   currentNoteId    = null;
   currentSelector  = editPrevSelector;
+  currentElementLabel = null;
   editPrevSelector = null;
   noteInput.value  = "";
   resetTypePicker();
@@ -635,11 +845,8 @@ async function deleteNote(id) {
 // ─── Save button ───────────────────────────────────────────────
 saveBtn.addEventListener("click", async () => {
   await flushSave();
-  if (isEditing) {
-    exitEditMode();
-  } else {
-    softReset();
-  }
+  if (isEditing) exitEditMode();
+  else softReset();
 });
 
 // ─── Keyboard shortcuts ────────────────────────────────────────
@@ -657,9 +864,7 @@ noteInput.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  // Let textarea handle its own native undo while focused
   if (document.activeElement === noteInput) return;
-
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z") {
     e.preventDefault();
     undo();
@@ -681,14 +886,11 @@ clearSelectorBtn.addEventListener("click", async () => {
   );
   const tab = tabs[0];
   if (tab?.id) {
-    // Bug 4: flag the incoming ELEMENT_DESELECTED so it doesn't trigger flushSave.
-    // clearSelectorBtn is a local UI action — we don't want to auto-save here.
     ignoreNextDeselect = true;
     chrome.tabs.sendMessage(tab.id, { type: "MARKUP_DESELECT" });
   }
   currentSelector = null;
-  // Bug 4: do NOT clear currentNoteId here.
-  // If in edit mode, currentNoteId must remain set so flushSave() updates in place.
+  currentElementLabel = null;
   selectorDisplay.textContent = "Hover to preview element";
   updateClearSelectorVisibility();
 });
@@ -702,7 +904,7 @@ clearAllBtn.addEventListener("click", () => {
 });
 
 clearConfirmYesBtn.addEventListener("click", async () => {
-  await writeBackup(); // Bug 9: persist a backup before destructive clear
+  await writeBackup();
   pushUndo("Clear all undone");
   notes = [];
   await persistNotes();
@@ -715,8 +917,7 @@ clearConfirmNoBtn.addEventListener("click", () => {
   updateClearAllVisibility();
 });
 
-// ─── Note pending prompt (Bug 7) ───────────────────────────────
-// Shown when user selects a new element while there is unsaved text.
+// ─── Note pending prompt ───────────────────────────────────────
 notePendingSaveBtn.addEventListener("click", async () => {
   notePendingPrompt.hidden = true;
   const sel = pendingElementSelector;
@@ -771,68 +972,91 @@ function buildBriefText() {
     .map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`)
     .join(" · ");
 
+  // Sprint 8 F11: mode-aware copy
+  const isUserInterview = briefMode === "user-interview";
+  const modeLabel    = isUserInterview ? "User Interview"  : "Self Review";
+
   const lines = [
     `# Markup — Fix Instructions`,
     ``,
     `**Project:** ${project}`,
     `**URL:** ${currentTabUrl || "Unknown"}`,
     `**Reviewed:** ${dateStr} at ${timeStr}`,
-    `**Mode:** Self Review`,
+    `**Mode:** ${modeLabel}`,
     `**Total Issues:** ${notes.length}`,
     `**Severity:** ${sevSummary}`,
     ``,
     `---`,
   ];
 
-  // Group by severity, sort within severity by type
-  for (const sev of SEVERITY_ORDER) {
-    const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
-    if (sevNotes.length === 0) continue;
-
-    const cfg = SEVERITY_CONFIG[sev];
+  // Sprint 8 F10 setting: severity-grouped (default) or chronological
+  if (briefSortMode === "chronological") {
     lines.push(``);
-    lines.push(`## ${cfg.emoji} ${cfg.label} (${sevNotes.length})`);
-
-    const sorted = [...sevNotes].sort(
-      (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
-    );
-
+    const sorted = [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     sorted.forEach((note, i) => {
       if (i > 0) lines.push(``);
       const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-      const elementLabel = note.elementName || note.selector || "No element selected";
-      lines.push(`**[${typeCfg.label}]** ${elementLabel}`);
-      if (note.selector) {
-        lines.push(`**Selector:** ${note.selector}`);
-      }
+      const sev     = note.severity || "medium";
+      const sevCfg  = SEVERITY_CONFIG[sev];
+      const label   = note.elementLabel || note.elementName || note.selector || "No element selected";
+      lines.push(`**[${typeCfg.label} · ${sevCfg.label}]** ${label}`);
+      if (note.selector) lines.push(`**Selector:** ${note.selector}`);
       lines.push(`**${typeCfg.field}:** ${note.text}`);
     });
-
     lines.push(``);
     lines.push(`---`);
+  } else {
+    // Severity-grouped (default)
+    for (const sev of SEVERITY_ORDER) {
+      const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
+      if (sevNotes.length === 0) continue;
+
+      const cfg = SEVERITY_CONFIG[sev];
+      lines.push(``);
+      lines.push(`## ${cfg.emoji} ${cfg.label} (${sevNotes.length})`);
+
+      const sorted = [...sevNotes].sort(
+        (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+      );
+
+      sorted.forEach((note, i) => {
+        if (i > 0) lines.push(``);
+        const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+        // Sprint 8 F5: use elementLabel if available
+        const label = note.elementLabel || note.elementName || note.selector || "No element selected";
+        lines.push(`**[${typeCfg.label}]** ${label}`);
+        if (note.selector) lines.push(`**Selector:** ${note.selector}`);
+        lines.push(`**${typeCfg.field}:** ${note.text}`);
+      });
+
+      lines.push(``);
+      lines.push(`---`);
+    }
   }
 
   return lines.join("\n");
 }
 
 function showBrief() {
-  // Hide list and form immediately
   notesList.hidden = true;
   sessionTitleWrap.hidden = true;
   clearConfirmEl.hidden = true;
   formArea.hidden = true;
   filterTabsEl.hidden = true;
+  markupActionsEl.hidden = true;
+  toggleSectionEl.hidden = true;
+  storageQuotaWarning.hidden = true;
 
-  // Show panel in generating state
   briefContent.hidden = true;
   briefGenerating.hidden = false;
   briefPanel.hidden = false;
 
-  // Brief generation is instant — add a short delay for visual feedback
-  setTimeout(() => {
-    briefContent.textContent = buildBriefText();
+  setTimeout(async () => {
+    const briefText = buildBriefText();
+    briefContent.textContent = briefText;
     briefGenerating.hidden = true;
     briefContent.hidden = false;
+    await saveBrief(briefText); // Sprint 8 F1: persist to history
   }, 400);
 }
 
@@ -840,10 +1064,16 @@ function hideBrief() {
   briefPanel.hidden = true;
   briefContent.hidden = false;
   briefGenerating.hidden = true;
+  // Reset brief history collapsible
+  if (briefHistoryDetails) briefHistoryDetails.open = false;
+
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
   formArea.hidden = false;
   filterTabsEl.hidden = false;
+  markupActionsEl.hidden = false;
+  toggleSectionEl.hidden = false;
+  checkStorageQuota(); // restore quota warning if needed
 }
 
 generateBtn.addEventListener("click", () => {
@@ -858,9 +1088,7 @@ copyBriefBtn.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(briefContent.textContent);
     copyBriefBtn.textContent = "Copied!";
-    setTimeout(() => {
-      copyBriefBtn.textContent = "Copy to Clipboard";
-    }, 2000);
+    setTimeout(() => { copyBriefBtn.textContent = "Copy to Clipboard"; }, 2000);
   } catch {
     showToast("Copy failed — try again.");
   }
@@ -869,21 +1097,133 @@ copyBriefBtn.addEventListener("click", async () => {
 downloadBriefBtn.addEventListener("click", () => {
   const text = briefContent.textContent;
   const dateStr = new Date().toISOString().slice(0, 10);
-  const filename = `markup-brief-${dateStr}.md`;
   const blob = new Blob([text], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = `markup-brief-${dateStr}.md`;
   a.click();
   URL.revokeObjectURL(url);
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
 
+// ─── Sprint 8 F10: Settings panel ─────────────────────────────
+function showSettings() {
+  notesList.hidden = true;
+  sessionTitleWrap.hidden = true;
+  filterTabsEl.hidden = true;
+  clearConfirmEl.hidden = true;
+  formArea.hidden = true;
+  markupActionsEl.hidden = true;
+  toggleSectionEl.hidden = true;
+  storageQuotaWarning.hidden = true;
+  settingsPanel.hidden = false;
+  loadSettingsPanel();
+}
+
+function hideSettings() {
+  settingsPanel.hidden = true;
+  notesList.hidden = false;
+  sessionTitleWrap.hidden = false;
+  filterTabsEl.hidden = false;
+  formArea.hidden = false;
+  markupActionsEl.hidden = false;
+  toggleSectionEl.hidden = false;
+  checkStorageQuota();
+}
+
+async function loadSettingsPanel() {
+  // Version
+  try {
+    const manifest = chrome.runtime.getManifest();
+    if (settingsVersionEl) settingsVersionEl.textContent = `getmarkup.dev · v${manifest.version}`;
+  } catch { /* */ }
+
+  // Storage usage
+  try {
+    const bytesUsed = await new Promise((resolve) =>
+      chrome.storage.local.getBytesInUse(null, resolve)
+    );
+    const kb = Math.round(bytesUsed / 1024);
+    const pct = Math.min(100, (bytesUsed / (5 * 1024 * 1024)) * 100);
+    if (storageUsageText) storageUsageText.textContent = `${kb} KB used of 5120 KB`;
+    if (storageUsageFill) {
+      storageUsageFill.style.width = pct + "%";
+      storageUsageFill.className = "storage-usage__fill" +
+        (pct >= 96 ? " storage-usage__fill--critical" :
+         pct >= 80 ? " storage-usage__fill--warn" : "");
+    }
+  } catch { /* */ }
+
+  // Brief sort radios — sync to current state
+  briefSortRadios.forEach((radio) => {
+    radio.checked = radio.value === briefSortMode;
+  });
+}
+
+settingsBtn.addEventListener("click", showSettings);
+closeSettingsBtn.addEventListener("click", hideSettings);
+
+// Brief sort persistence
+briefSortRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    briefSortMode = radio.value;
+    chrome.storage.local.set({ markup_brief_sort: briefSortMode });
+  });
+});
+
+// Settings: Clear all notes for this page
+settingsClearAllBtn.addEventListener("click", async () => {
+  if (!confirm(`Delete all ${notes.length} note${notes.length === 1 ? "" : "s"} for this page?`)) return;
+  await writeBackup();
+  notes = [];
+  await persistNotes();
+  renderNotesList();
+  showToast("All notes cleared.");
+  hideSettings();
+});
+
+// Export JSON
+exportJsonBtn.addEventListener("click", () => {
+  const data = JSON.stringify(notes, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `markup-notes-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Notes exported as JSON.");
+});
+
+// Export CSV
+exportCsvBtn.addEventListener("click", () => {
+  const headers = ["id", "type", "severity", "selector", "elementLabel", "text", "createdAt"];
+  const rows = notes.map((n) =>
+    [
+      n.id,
+      n.type,
+      n.severity || "medium",
+      n.selector || "",
+      n.elementLabel || "",
+      n.text,
+      new Date(n.createdAt || 0).toISOString(),
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
+  );
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `markup-notes-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Notes exported as CSV.");
+});
+
 // ─── Messages from content script and background ───────────────
 chrome.runtime.onMessage.addListener((message) => {
-  // Fix 1: active tab navigated to a new URL — silently load new page's notes
   if (message.type === "TAB_URL_CHANGED") {
     setToggleState(false);
     noteInput.value = "";
@@ -906,23 +1246,21 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "ELEMENT_SELECTED") {
-    // Bug 7: user has unsaved text for a new (not-yet-saved) note — prompt before switching.
-    // If editing an existing note (currentNoteId set), auto-save is fine.
     if (noteInput.value.trim() && !currentNoteId) {
       pendingElementSelector = message.selector;
       notePendingPrompt.hidden = false;
       return;
     }
-    // No unsaved text, or editing an existing note — proceed normally.
     flushSave().then(() => {
       if (isEditing) {
         isEditing        = false;
         editPrevSelector = null;
         saveBtn.textContent = "Save Note";
       }
-      currentSelector = message.selector;
-      currentNoteId   = null;
-      selectorRow.hidden = false;
+      currentSelector     = message.selector;
+      currentElementLabel = message.elementLabel || null; // Sprint 8 F5
+      currentNoteId       = null;
+      selectorRow.hidden  = false;
       selectorDisplay.textContent = message.selector;
       noteInput.value = "";
       resetTypePicker();
@@ -932,7 +1270,6 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "ELEMENT_DESELECTED") {
-    // Bug 4: clearSelectorBtn sets this flag so we don't auto-save on its deselect.
     if (ignoreNextDeselect) {
       ignoreNextDeselect = false;
       return;
@@ -943,25 +1280,19 @@ chrome.runtime.onMessage.addListener((message) => {
         editPrevSelector = null;
         saveBtn.textContent = "Save Note";
       }
-      currentSelector = null;
-      currentNoteId   = null;
-      // Bug 6 fix: only clear noteInput on an explicit user deselect (Markup still ON).
-      // When Markup deactivates, content script sends ELEMENT_DESELECTED before
-      // MARKUP_DEACTIVATED. By the time this .then() runs, MARKUP_DEACTIVATED has
-      // already fired and deactivateReset() has intentionally preserved noteInput.
-      // Clearing it here would undo that preservation.
+      currentSelector     = null;
+      currentElementLabel = null;
+      currentNoteId       = null;
       if (markupActive) {
         noteInput.value = "";
       }
       selectorDisplay.textContent = "Hover to preview element";
       resetTypePicker();
       updateClearSelectorVisibility();
-      // saveBtn stays enabled — Markup is still ON
     });
   }
 
   if (message.type === "ELEMENT_HOVERED") {
-    // Bug 5: only update when Markup is ON (selectorRow is visible) and no element locked
     if (!currentSelector) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = message.selector;
@@ -973,11 +1304,19 @@ chrome.runtime.onMessage.addListener((message) => {
       selectorDisplay.textContent = "Hover to preview element";
     }
   }
+
+  // Sprint 8 F6: badge click → scroll to + flash note card
+  if (message.type === "BADGE_HOVERED" || message.type === "BADGE_CLICKED") {
+    const card = document.querySelector(`.note-card[data-note-id="${message.noteId}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      card.classList.add("note-card--highlighted");
+      setTimeout(() => card.classList.remove("note-card--highlighted"), 1200);
+    }
+  }
 });
 
-// ─── Tab state loader (Bug 1) ───────────────────────────────────
-// Shared by init() and chrome.tabs.onActivated — loads notes + session title
-// for a given tab and re-syncs the toggle state.
+// ─── Tab state loader ──────────────────────────────────────────
 async function loadTabState(tab) {
   currentTabId   = tab?.id    || null;
   tabTitle       = tab?.title || "";
@@ -989,7 +1328,6 @@ async function loadTabState(tab) {
     const stored = await loadSessionTitle();
     sessionTitle = stored !== null ? stored : tabTitle;
     sessionTitleInput.value = sessionTitle;
-    // Fix 1: show domain so user always knows which page's notes they're viewing
     if (viewingUrlText) {
       let domain = currentNoteUrl;
       try { domain = new URL(currentNoteUrl).hostname; } catch { /* use full url */ }
@@ -1002,8 +1340,9 @@ async function loadTabState(tab) {
     if (viewingUrlText) viewingUrlText.textContent = "";
   }
   renderNotesList();
+  updateBadge(); // Sprint 8 F2: sync badge on tab load
+  await renderBriefHistory(); // Sprint 8 F1: pre-load history list
 
-  // Re-sync toggle if the content script is already active on this tab (Bug 3)
   if (currentTabId) {
     try {
       const results = await chrome.scripting.executeScript({
@@ -1015,12 +1354,10 @@ async function loadTabState(tab) {
         setToggleState(true);
       }
     } catch {
-      // Restricted page or content script unavailable — stay OFF.
+      // Restricted page — stay OFF
     }
   }
 
-  // Bug 6: proactively show hint for restricted pages so users understand immediately
-  // why the toggle won't activate, rather than discovering it after clicking.
   const url = currentTabUrl;
   const isRestricted =
     url.startsWith("chrome://") ||
@@ -1041,27 +1378,46 @@ async function init() {
     document.getElementById("version-text").textContent = `getmarkup.dev · v${manifest.version}`;
   } catch { /* not critical */ }
 
+  // Sprint 8 F10: load brief sort setting
+  try {
+    const stored = await safeGet("markup_brief_sort", "severity");
+    briefSortMode = stored;
+    briefSortRadios.forEach((r) => { r.checked = r.value === briefSortMode; });
+  } catch { /* */ }
+
+  // Sprint 8 F7: start timestamp refresh interval
+  if (timestampInterval) clearInterval(timestampInterval);
+  timestampInterval = setInterval(refreshTimestamps, 60000);
+
   const tabs = await new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, resolve);
   });
   const tab = tabs[0];
-  currentWindowId = tab?.windowId || null; // Bug 1: capture window to filter onActivated
-  await loadTabState(tab);
+  currentWindowId = tab?.windowId || null;
+
+  try {
+    await loadTabState(tab);
+  } catch (err) {
+    // Sprint 8 F9: init failure fallback
+    console.error("Markup: init failed", err);
+    emptyState.innerHTML = `
+      <p class="empty-state__text">Markup failed to load.</p>
+      <button class="btn-activate" id="reload-markup">Reload Markup</button>
+    `;
+    document.getElementById("reload-markup")?.addEventListener("click", () => {
+      window.location.reload();
+    });
+  }
 }
 
-// ─── Tab switch listener (Bug 1) ───────────────────────────────
-// When the user switches tabs, reload notes and session state for the new tab's URL.
+// ─── Tab switch listener ───────────────────────────────────────
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  // Only react to tab changes in the sidebar's own window
   if (currentWindowId && activeInfo.windowId !== currentWindowId) return;
 
-  // Dismiss any pending-prompt state from the previous tab
   pendingElementSelector = null;
   notePendingPrompt.hidden = true;
   ignoreNextDeselect = false;
 
-  // Reset Markup UI (deactivateReset preserves noteInput, but on tab switch
-  // that text belongs to the old tab's context so we clear it explicitly)
   setToggleState(false);
   noteInput.value = "";
   activationHint.hidden = true;

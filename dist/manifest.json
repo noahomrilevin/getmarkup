@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Markup",
-  "version": "0.7.0",
-  "description": "Annotate any page. Generate structured AI fix briefs.",
+  "version": "0.8.0",
+  "description": "Annotate any page. Generate structured fix briefs.",
   "permissions": [
     "storage",
     "tabs",
     "activeTab",
     "scripting",
-    "sidePanel"
+    "sidePanel",
+    "action"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -21,6 +22,15 @@
   },
   "action": {
     "default_title": "Open Markup"
+  },
+  "commands": {
+    "open-markup": {
+      "suggested_key": {
+        "default": "Alt+M",
+        "mac": "Alt+M"
+      },
+      "description": "Open Markup sidebar"
+    }
   },
   "content_scripts": [
     {

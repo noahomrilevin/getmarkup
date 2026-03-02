@@ -8,6 +8,7 @@ const RING_ID         = "__markup-ring";
 const RING_LABEL_ID   = "__markup-ring-label";
 const ESC_HINT_ID     = "__markup-esc-hint";
 const CURSOR_STYLE_ID = "__markup-cursor";
+const BADGE_CLASS     = "__markup-badge";
 const HIGHLIGHT_COLOR = "#FF8400";
 
 // ─── State ────────────────────────────────────────────────────────
@@ -16,15 +17,17 @@ let selectedEl = null;
 let isActive   = false;
 
 // Fix 4: MutationObserver repositions the ring when the page's DOM shifts
-// (e.g. LinkedIn infinite-scroll pushing selected element out of view)
 let mutationObserver = null;
 let reposTimeout     = null;
 window.__markupReady  = true;
 window.__markupActive = false; // Bug 3: sidebar reads this on reopen to restore state
 
+// Sprint 8: annotation badge state
+let badgeElements = []; // [{ noteId, el, badge }]
+let currentAnnotatedNotes = []; // last notes received from sidebar
+let badgeScrollRAF = null; // RAF id for badge reposition
+
 // ─── Fix 2: Cursor override ───────────────────────────────────────
-// Some sites hide the cursor with cursor:none. Force it visible while
-// Markup is active so users can always see where they're pointing.
 function injectCursorOverride() {
   if (document.getElementById(CURSOR_STYLE_ID)) return;
   const style = document.createElement("style");
@@ -38,8 +41,6 @@ function removeCursorOverride() {
 }
 
 // ─── MutationObserver — reposition ring when page layout shifts ───
-// LinkedIn and similar SPAs dynamically insert content that shifts elements.
-// We watch the body subtree and debounce a ring reposition on any DOM change.
 function startMutationObserver() {
   if (mutationObserver) return;
   const target = document.body || document.documentElement;
@@ -49,7 +50,7 @@ function startMutationObserver() {
     reposTimeout = setTimeout(() => {
       reposTimeout = null;
       if (isActive && selectedEl) positionRing(selectedEl);
-    }, 300); // Fix 4: 300ms debounce — LinkedIn's infinite scroll fires too fast at 50ms
+    }, 300);
   });
   mutationObserver.observe(target, { childList: true, subtree: true });
 }
@@ -65,9 +66,6 @@ function ensureRing() {
   if (ring) return ring;
   ring = document.createElement("div");
   ring.id = RING_ID;
-  // Fix 4: all:initial resets host-page CSS from bleeding into the ring element.
-  // Each property then overrides with !important (inline !important beats author
-  // stylesheet !important, so this survives LinkedIn-style aggressive CSS resets).
   ring.style.cssText = [
     "all: initial",
     "position: fixed !important",
@@ -107,16 +105,13 @@ function ensureRing() {
   return ring;
 }
 
-// Fix 1: two visually distinct modes
 function setRingMode(mode) {
   const r = ensureRing();
   const label = document.getElementById(RING_LABEL_ID);
   if (mode === "selected") {
-    // Locked in: solid, full opacity
     r.style.setProperty("border", `2px solid ${HIGHLIGHT_COLOR}`, "important");
     if (label) label.style.opacity = "1";
   } else {
-    // Intent only: dashed, 50% opacity
     r.style.setProperty("border", "2px dashed rgba(255, 132, 0, 0.5)", "important");
     if (label) label.style.opacity = "0";
   }
@@ -155,7 +150,6 @@ function positionRing(el) {
   if (!isActive) return;
   const r = ensureRing();
   const rect = el.getBoundingClientRect();
-  // Bug 2: use setProperty with !important so site CSS can't shift the ring
   r.style.setProperty("display", "block",              "important");
   r.style.setProperty("top",     rect.top  + "px",    "important");
   r.style.setProperty("left",    rect.left + "px",    "important");
@@ -184,10 +178,108 @@ function getSelector(el) {
   }
 }
 
+// ─── Sprint 8 F5: Human-readable element label ────────────────────
+// Priority: aria-label > alt > visible text (40 chars) > tagName.class
+function getElementLabel(el) {
+  const ariaLabel = el.getAttribute("aria-label");
+  if (ariaLabel && ariaLabel.trim()) {
+    return ariaLabel.trim().slice(0, 40);
+  }
+  const alt = el.getAttribute("alt");
+  if (alt && alt.trim()) {
+    return alt.trim().slice(0, 40);
+  }
+  const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
+  if (text) {
+    return text.length > 40 ? text.slice(0, 40) + "…" : text;
+  }
+  // Fallback: tagName + first class
+  const cls = typeof el.className === "string" && el.className.trim()
+    ? "." + el.className.trim().split(/\s+/)[0]
+    : "";
+  return el.tagName.toLowerCase() + cls;
+}
+
+// ─── Sprint 8 F6: Annotation badges ──────────────────────────────
+// Numbered gold circles on annotated elements. Rerender on notes update.
+function clearAllBadges() {
+  document.querySelectorAll("." + BADGE_CLASS).forEach((el) => el.remove());
+  badgeElements = [];
+}
+
+function repositionBadges() {
+  badgeElements.forEach(({ el, badge }) => {
+    try {
+      const rect = el.getBoundingClientRect();
+      badge.style.top  = (rect.top - 9) + "px";
+      badge.style.left = (rect.left + rect.width - 9) + "px";
+    } catch { /* element may have left DOM */ }
+  });
+}
+
+function renderBadges() {
+  if (!isActive) return;
+  clearAllBadges();
+  currentAnnotatedNotes.forEach((note, index) => {
+    if (!note.selector) return;
+    let el;
+    try { el = document.querySelector(note.selector); } catch { return; }
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const badge = document.createElement("div");
+    badge.className = BADGE_CLASS;
+    badge.textContent = String(index + 1);
+    badge.dataset.noteId = note.id;
+
+    Object.assign(badge.style, {
+      all:            "initial",
+      position:       "fixed",
+      top:            (rect.top - 9) + "px",
+      left:           (rect.left + rect.width - 9) + "px",
+      width:          "18px",
+      height:         "18px",
+      borderRadius:   "50%",
+      background:     "#C9A84C",
+      color:          "#FFFFFF",
+      fontSize:       "10px",
+      fontFamily:     "monospace",
+      fontWeight:     "bold",
+      display:        "flex",
+      alignItems:     "center",
+      justifyContent: "center",
+      zIndex:         "2147483647",
+      cursor:         "pointer",
+      userSelect:     "none",
+      boxShadow:      "0 1px 4px rgba(0,0,0,0.25)",
+      lineHeight:     "1",
+      pointerEvents:  "auto",
+    });
+
+    badge.addEventListener("mouseenter", () => {
+      sendToSidebar({ type: "BADGE_HOVERED", noteId: note.id });
+    });
+    badge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      sendToSidebar({ type: "BADGE_CLICKED", noteId: note.id });
+    });
+
+    document.documentElement.appendChild(badge);
+    badgeElements.push({ noteId: note.id, el, badge });
+  });
+}
+
+// Reposition badges on scroll using RAF to avoid thrash
+function onBadgeScroll() {
+  if (badgeScrollRAF) return;
+  badgeScrollRAF = requestAnimationFrame(() => {
+    badgeScrollRAF = null;
+    repositionBadges();
+  });
+}
+
 // ─── Send message to sidebar ──────────────────────────────────────
-// Fix 4: wrap in try/catch — Chrome throws synchronously when the extension
-// context is invalidated (e.g. after an extension update while a tab is open).
-// Deactivate the orphaned script so it stops intercepting clicks.
 function sendToSidebar(message) {
   try {
     chrome.runtime.sendMessage(message).catch(() => {
@@ -210,18 +302,18 @@ function clearSelection() {
 
 // ─── Event handlers (named so they can be removed) ────────────────
 function onMouseover(e) {
-  if (!isActive || selectedEl) return; // guard against stale listener firing
+  if (!isActive || selectedEl) return;
   const target = e.target;
   if (
     target === ring ||
     target === document.documentElement ||
-    target === document.body
+    target === document.body ||
+    target.classList.contains(BADGE_CLASS)
   ) {
     return;
   }
   setRingMode("hover");
   positionRing(target);
-  // Hover preview — send selector so sidebar can show it before click
   const selector = getSelector(target);
   if (selector) {
     sendToSidebar({ type: "ELEMENT_HOVERED", selector });
@@ -229,17 +321,17 @@ function onMouseover(e) {
 }
 
 function onMouseout() {
-  if (!isActive || selectedEl) return; // guard against stale listener firing
+  if (!isActive || selectedEl) return;
   hideRing();
   sendToSidebar({ type: "ELEMENT_HOVER_END" });
 }
 
 function onClick(e) {
-  // Bug 5: safety net — if deactivate() failed to remove this listener for any reason,
-  // bail immediately so we never block clicks when Markup is OFF.
   if (!isActive) return;
   const target = e.target;
   if (target === ring || target.id === RING_ID) return;
+  // Badges handle their own click — don't intercept
+  if (target.classList.contains(BADGE_CLASS)) return;
 
   e.preventDefault();
   e.stopPropagation();
@@ -258,7 +350,6 @@ function onClick(e) {
   setRingMode("selected");
   positionRing(target);
   showEscHint();
-  // Fix 4: log selected element for debugging on aggressive-DOM sites like LinkedIn
   console.log(
     "Markup: selected →",
     target.tagName +
@@ -268,11 +359,15 @@ function onClick(e) {
         : ""),
     "| selector:", selector
   );
-  sendToSidebar({ type: "ELEMENT_SELECTED", selector });
+
+  // Sprint 8 F5: include human-readable label with selection message
+  const elementLabel = getElementLabel(target);
+  sendToSidebar({ type: "ELEMENT_SELECTED", selector, elementLabel });
 }
 
 function onScroll() {
   if (selectedEl) positionRing(selectedEl);
+  if (badgeElements.length > 0) onBadgeScroll();
 }
 
 function onKeydown(e) {
@@ -284,16 +379,18 @@ function activate() {
   if (isActive) return;
   isActive = true;
   window.__markupActive = true;
-  selectedEl = null; // clear any stale selection from a previous session
+  selectedEl = null;
   hideRing();
   injectCursorOverride();
   ensureRing();
-  startMutationObserver(); // Fix 4: reposition ring when page DOM shifts (LinkedIn etc.)
+  startMutationObserver();
   document.addEventListener("mouseover", onMouseover, { capture: true, passive: true });
   document.addEventListener("mouseout", onMouseout, { capture: true, passive: true });
   document.addEventListener("click", onClick, { capture: true });
   document.addEventListener("scroll", onScroll, { capture: true, passive: true });
   document.addEventListener("keydown", onKeydown);
+  // Re-render badges if we have notes waiting
+  if (currentAnnotatedNotes.length > 0) renderBadges();
   sendToSidebar({ type: "MARKUP_ACTIVATED" });
 }
 
@@ -305,7 +402,8 @@ function deactivate() {
   hideRing();
   hideEscHint();
   removeCursorOverride();
-  stopMutationObserver(); // Fix 4: stop watching for DOM shifts
+  stopMutationObserver();
+  clearAllBadges(); // Sprint 8 F6: remove all annotation badges on deactivate
   document.removeEventListener("mouseover", onMouseover, { capture: true });
   document.removeEventListener("mouseout", onMouseout, { capture: true });
   document.removeEventListener("click", onClick, { capture: true });
@@ -319,4 +417,29 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "MARKUP_ACTIVATE") activate();
   if (message.type === "MARKUP_DEACTIVATE") deactivate();
   if (message.type === "MARKUP_DESELECT") clearSelection();
+
+  // Sprint 8 F6: sidebar sends updated notes list — re-render annotation badges
+  if (message.type === "NOTES_UPDATED") {
+    currentAnnotatedNotes = message.notes || [];
+    if (isActive) renderBadges();
+  }
+
+  // Sprint 8 F8: hover on note card temporarily shows ring on that element
+  if (message.type === "HIGHLIGHT_ELEMENT") {
+    if (!isActive || selectedEl) return; // never override a locked selection
+    try {
+      const el = document.querySelector(message.selector);
+      if (el) {
+        setRingMode("hover");
+        positionRing(el);
+      }
+    } catch { /* invalid selector — ignore */ }
+  }
+
+  // Sprint 8 F8: mouseout from note card — clear temporary highlight
+  if (message.type === "HIGHLIGHT_ELEMENT_END") {
+    if (!isActive || selectedEl) return;
+    hideRing();
+    sendToSidebar({ type: "ELEMENT_HOVER_END" });
+  }
 });
