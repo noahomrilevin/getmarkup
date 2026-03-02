@@ -686,8 +686,8 @@
   var isActive = false;
   var mutationObserver = null;
   var reposTimeout = null;
-  window.__markupReady = true;
-  window.__markupActive = false;
+  window["__mkp_" + chrome.runtime.id + "_ready"] = true;
+  window["__mkp_" + chrome.runtime.id + "_active"] = false;
   var badgeElements = [];
   var currentAnnotatedNotes = [];
   var badgeScrollRAF = null;
@@ -984,7 +984,7 @@
   function activate() {
     if (isActive) return;
     isActive = true;
-    window.__markupActive = true;
+    window["__mkp_" + chrome.runtime.id + "_active"] = true;
     selectedEl = null;
     hideRing();
     injectCursorOverride();
@@ -1001,7 +1001,7 @@
   function deactivate() {
     if (!isActive) return;
     isActive = false;
-    window.__markupActive = false;
+    window["__mkp_" + chrome.runtime.id + "_active"] = false;
     clearSelection();
     hideRing();
     hideEscHint();

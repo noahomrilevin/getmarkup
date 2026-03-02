@@ -19,8 +19,8 @@ let isActive   = false;
 // Fix 4: MutationObserver repositions the ring when the page's DOM shifts
 let mutationObserver = null;
 let reposTimeout     = null;
-window.__markupReady  = true;
-window.__markupActive = false; // Bug 3: sidebar reads this on reopen to restore state
+window["__mkp_" + chrome.runtime.id + "_ready"]  = true;
+window["__mkp_" + chrome.runtime.id + "_active"] = false; // Bug 3: sidebar reads this on reopen to restore state
 
 // Sprint 8: annotation badge state
 let badgeElements = []; // [{ noteId, el, badge }]
@@ -378,7 +378,7 @@ function onKeydown(e) {
 function activate() {
   if (isActive) return;
   isActive = true;
-  window.__markupActive = true;
+  window["__mkp_" + chrome.runtime.id + "_active"] = true;
   selectedEl = null;
   hideRing();
   injectCursorOverride();
@@ -397,7 +397,7 @@ function activate() {
 function deactivate() {
   if (!isActive) return;
   isActive = false;
-  window.__markupActive = false;
+  window["__mkp_" + chrome.runtime.id + "_active"] = false;
   clearSelection();
   hideRing();
   hideEscHint();

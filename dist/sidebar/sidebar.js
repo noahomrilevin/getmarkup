@@ -34,6 +34,10 @@ const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 // ─── Storage quota constants (Sprint 8 F4) ─────────────────────
 const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
 
+// ─── Global brief archive constants ────────────────────────────
+const BRIEFS_KEY  = "markup_briefs_all";
+const BRIEFS_MAX  = 50;
+
 // ─── State ─────────────────────────────────────────────────────
 let currentSelector       = null;
 let currentElementLabel   = null; // Sprint 8 F5: human-readable label
@@ -56,6 +60,7 @@ let activeFilter          = "all";
 let ignoreNextDeselect    = false;
 let pendingElementSelector = null;
 let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
+let briefReaderCurrentBrief = null; // brief object open in reader
 let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
 
 // ─── DOM refs ──────────────────────────────────────────────────
@@ -81,9 +86,17 @@ const briefGenerating    = document.getElementById("brief-generating");
 const copyBriefBtn       = document.getElementById("copy-brief");
 const downloadBriefBtn   = document.getElementById("download-brief");
 const closeBriefBtn      = document.getElementById("close-brief");
-const briefHistoryDetails = document.getElementById("brief-history-details");
-const briefHistorySummary = document.getElementById("brief-history-summary");
-const briefHistoryItems  = document.getElementById("brief-history-items");
+const briefsArchiveBtn   = document.getElementById("briefs-archive-btn");
+const briefsArchivePanelEl = document.getElementById("briefs-archive-panel");
+const briefsArchiveList  = document.getElementById("briefs-archive-list");
+const briefsArchiveCountEl = document.getElementById("briefs-archive-count");
+const closeBriefArchiveBtn = document.getElementById("close-briefs-archive");
+const briefReaderPanelEl = document.getElementById("brief-reader-panel");
+const briefReaderContent = document.getElementById("brief-reader-content");
+const briefReaderNameEl  = document.getElementById("brief-reader-name");
+const closeBriefReaderBtn = document.getElementById("close-brief-reader");
+const copyBriefReaderBtn = document.getElementById("copy-brief-reader");
+const downloadBriefReaderBtn = document.getElementById("download-brief-reader");
 const formArea           = document.querySelector(".markup-form-area");
 const clearAllBtn        = document.getElementById("clear-all");
 const clearConfirmEl     = document.getElementById("clear-confirm");
@@ -109,7 +122,7 @@ const settingsClearAllBtn = document.getElementById("settings-clear-all");
 const settingsVersionEl  = document.getElementById("settings-version");
 const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
-const briefSortRadios    = document.querySelectorAll("input[name='brief-sort']");
+const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
@@ -202,7 +215,8 @@ async function sendToggle() {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => window.__markupReady === true,
+      func: (extId) => window["__mkp_" + extId + "_ready"] === true,
+      args: [chrome.runtime.id],
     });
     ready = results?.[0]?.result === true;
   } catch (err) {
@@ -301,7 +315,8 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function getActiveType() {
@@ -408,101 +423,234 @@ async function writeBackup() {
   console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
 }
 
-// ─── Sprint 8 F1: Brief history storage ───────────────────────
-// Saves last 10 generated briefs per URL with severity summary for each.
-function loadBriefs() {
-  const key = `markup_briefs_${currentNoteUrl}`;
-  return safeGet(key, []);
+// ─── Global Brief Archive storage ─────────────────────────────
+function loadAllBriefs() {
+  return safeGet(BRIEFS_KEY, []);
 }
 
 async function saveBrief(markdown) {
-  if (!currentNoteUrl) return;
-  const key = `markup_briefs_${currentNoteUrl}`;
-  const existing = await loadBriefs();
+  const existing = await loadAllBriefs();
 
-  // Build severity summary string: "2 Critical · 1 High"
-  const sevSummary = SEVERITY_ORDER
-    .map((s) => ({ s, n: notes.filter((n) => (n.severity || "medium") === s).length }))
-    .filter(({ n }) => n > 0)
-    .map(({ s, n }) => `${n} ${SEVERITY_CONFIG[s].label}`)
-    .join(" · ") || null;
+  // Auto-name: "[pageName or domain] · [date]"
+  let autoName = "Brief";
+  try {
+    const domain = new URL(currentNoteUrl).hostname;
+    const pageName = sessionTitle || tabTitle || domain;
+    const dateStr = new Date().toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+    autoName = `${pageName} · ${dateStr}`;
+  } catch { /* keep default */ }
+
+  const severitySummary = {
+    critical: notes.filter((n) => (n.severity || "medium") === "critical").length,
+    high:     notes.filter((n) => (n.severity || "medium") === "high").length,
+    medium:   notes.filter((n) => (n.severity || "medium") === "medium").length,
+    low:      notes.filter((n) => (n.severity || "medium") === "low").length,
+  };
 
   const entry = {
     id: generateId(),
+    name: autoName,
+    url: currentNoteUrl,
+    pageTitle: sessionTitle || tabTitle || "",
     timestamp: Date.now(),
     noteCount: notes.length,
-    sevSummary,
+    severitySummary,
     markdown,
   };
-  const updated = [...existing, entry].slice(-10);
-  await safeSet({ [key]: updated });
-  await renderBriefHistory(); // update the collapsible list
+
+  const updated = [...existing, entry].slice(-BRIEFS_MAX);
+  await safeSet({ [BRIEFS_KEY]: updated });
 }
 
 async function deleteBriefEntry(id) {
-  const key = `markup_briefs_${currentNoteUrl}`;
-  const existing = await loadBriefs();
+  const existing = await loadAllBriefs();
   const updated = existing.filter((b) => b.id !== id);
-  await safeSet({ [key]: updated });
-  await renderBriefHistory();
+  await safeSet({ [BRIEFS_KEY]: updated });
+  await renderBriefsArchiveList();
 }
 
-async function renderBriefHistory() {
-  if (!briefHistoryItems) return;
-  briefHistoryItems.innerHTML = "";
+async function renameBriefEntry(id, name) {
+  const existing = await loadAllBriefs();
+  const updated = existing.map((b) => b.id === id ? { ...b, name } : b);
+  await safeSet({ [BRIEFS_KEY]: updated });
+}
 
-  const briefs = await loadBriefs();
+// ─── Briefs Archive view ───────────────────────────────────────
+function showBriefsArchive() {
+  notesList.hidden = true;
+  sessionTitleWrap.hidden = true;
+  filterTabsEl.hidden = true;
+  clearConfirmEl.hidden = true;
+  formArea.hidden = true;
+  markupActionsEl.hidden = true;
+  toggleSectionEl.hidden = true;
+  storageQuotaWarning.hidden = true;
+  briefsArchivePanelEl.hidden = false;
+  renderBriefsArchiveList();
+}
 
-  // Update summary label
-  if (briefHistorySummary) {
-    briefHistorySummary.textContent = briefs.length > 0
-      ? `Past Briefs (${briefs.length})`
-      : "Past Briefs";
+function hideBriefsArchive() {
+  briefsArchivePanelEl.hidden = true;
+  notesList.hidden = false;
+  sessionTitleWrap.hidden = false;
+  filterTabsEl.hidden = false;
+  formArea.hidden = false;
+  markupActionsEl.hidden = false;
+  toggleSectionEl.hidden = false;
+  checkStorageQuota();
+}
+
+async function renderBriefsArchiveList() {
+  const briefs = await loadAllBriefs();
+
+  if (briefsArchiveCountEl) {
+    briefsArchiveCountEl.textContent = briefs.length > 0
+      ? `${briefs.length} brief${briefs.length === 1 ? "" : "s"}`
+      : "";
   }
+
+  briefsArchiveList.innerHTML = "";
 
   if (briefs.length === 0) {
     const empty = document.createElement("p");
-    empty.className = "brief-history-empty";
-    empty.textContent = "No past briefs for this page yet.";
-    briefHistoryItems.appendChild(empty);
+    empty.className = "briefs-archive__empty";
+    empty.textContent = "No briefs yet. Generate your first brief below.";
+    briefsArchiveList.appendChild(empty);
     return;
   }
 
   // Newest first
   [...briefs].reverse().forEach((brief) => {
     const item = document.createElement("div");
-    item.className = "brief-history-item";
+    item.className = "brief-entry";
 
-    const dateStr = new Date(brief.timestamp).toLocaleString("en-US", {
-      month: "short", day: "numeric",
+    const dateStr = new Date(brief.timestamp).toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+    const timeStr = new Date(brief.timestamp).toLocaleTimeString("en-US", {
       hour: "numeric", minute: "2-digit",
     });
-    const countStr = `${brief.noteCount} note${brief.noteCount === 1 ? "" : "s"}`;
-    const sevStr = brief.sevSummary ? ` · ${brief.sevSummary}` : "";
+
+    // Severity chips
+    const sev = brief.severitySummary || {};
+    const sevChips = SEVERITY_ORDER
+      .filter((s) => (sev[s] || 0) > 0)
+      .map((s) => `<span class="brief-entry__chip brief-entry__chip--${s}">${Number(sev[s])|0} ${SEVERITY_CONFIG[s].label}</span>`)
+      .join("");
+
+    let domain = brief.url || "";
+    try { domain = new URL(brief.url).hostname; } catch { /* */ }
 
     item.innerHTML = `
-      <div class="brief-history-item__meta">
-        <span class="brief-history-item__date">${escapeHtml(dateStr)}</span>
-        <span class="brief-history-item__counts">${escapeHtml(countStr + sevStr)}</span>
+      <div class="brief-entry__body">
+        <div class="brief-entry__name-wrap">
+          <span class="brief-entry__name" title="Click to rename">${escapeHtml(brief.name || "Untitled")}</span>
+          <input class="brief-entry__name-input" type="text" value="${escapeHtml(brief.name || "Untitled")}" hidden />
+        </div>
+        <span class="brief-entry__url">${escapeHtml(domain)}</span>
+        <div class="brief-entry__meta">
+          <span class="brief-entry__date">${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</span>
+          <span class="brief-entry__count">${Number(brief.noteCount)|0} note${Number(brief.noteCount)|0 === 1 ? "" : "s"}</span>
+        </div>
+        ${sevChips ? `<div class="brief-entry__chips">${sevChips}</div>` : ""}
       </div>
-      <div class="brief-history-item__actions">
-        <button class="btn-history-view">View</button>
-        <button class="btn-history-delete" aria-label="Delete this brief">🗑</button>
+      <div class="brief-entry__actions">
+        <button class="btn-brief-open">Open</button>
+        <button class="icon-btn btn-brief-delete" aria-label="Delete">✕</button>
       </div>
     `;
 
-    item.querySelector(".btn-history-view").addEventListener("click", () => {
-      briefContent.textContent = brief.markdown;
-      showToast("Brief restored.");
+    // Inline name editing
+    const nameEl = item.querySelector(".brief-entry__name");
+    const nameInput = item.querySelector(".brief-entry__name-input");
+    nameEl.addEventListener("click", () => {
+      nameEl.hidden = true;
+      nameInput.hidden = false;
+      nameInput.focus();
+      nameInput.select();
+    });
+    nameInput.addEventListener("blur", async () => {
+      const newName = nameInput.value.trim() || (brief.name || "Untitled");
+      await renameBriefEntry(brief.id, newName);
+      brief.name = newName;
+      nameEl.textContent = newName;
+      nameEl.hidden = false;
+      nameInput.hidden = true;
+    });
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") nameInput.blur();
+      if (e.key === "Escape") {
+        nameInput.value = brief.name || "Untitled";
+        nameEl.hidden = false;
+        nameInput.hidden = true;
+      }
     });
 
-    item.querySelector(".btn-history-delete").addEventListener("click", async () => {
+    item.querySelector(".btn-brief-open").addEventListener("click", () => {
+      showBriefReader(brief);
+    });
+
+    item.querySelector(".btn-brief-delete").addEventListener("click", async () => {
       await deleteBriefEntry(brief.id);
       showToast("Brief deleted.");
     });
 
-    briefHistoryItems.appendChild(item);
+    briefsArchiveList.appendChild(item);
   });
+}
+
+// ─── Simple markdown renderer (Brief Reader only) ──────────────
+function applyInline(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+function renderMarkdown(md) {
+  const lines = md.split("\n");
+  let html = "";
+  let inP = false;
+  const closeP = () => { if (inP) { html += "</p>"; inP = false; } };
+
+  for (const rawLine of lines) {
+    const line = rawLine
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    if (/^-{3,}$/.test(line.trim())) {
+      closeP();
+      html += "<hr>";
+      continue;
+    }
+    const h1 = line.match(/^# (.+)/);
+    if (h1) { closeP(); html += `<h1>${applyInline(h1[1])}</h1>`; continue; }
+    const h2 = line.match(/^## (.+)/);
+    if (h2) { closeP(); html += `<h2>${applyInline(h2[1])}</h2>`; continue; }
+    const h3 = line.match(/^### (.+)/);
+    if (h3) { closeP(); html += `<h3>${applyInline(h3[1])}</h3>`; continue; }
+    if (line.trim() === "") { closeP(); continue; }
+    if (!inP) { html += "<p>"; inP = true; } else { html += "<br>"; }
+    html += applyInline(line);
+  }
+  closeP();
+  return html;
+}
+
+// ─── Brief Reader view ─────────────────────────────────────────
+function showBriefReader(brief) {
+  briefsArchivePanelEl.hidden = true;
+  briefReaderPanelEl.hidden = false;
+  briefReaderContent.innerHTML = renderMarkdown(brief.markdown || "");
+  if (briefReaderNameEl) briefReaderNameEl.textContent = brief.name || "Brief";
+  briefReaderCurrentBrief = brief;
+}
+
+function hideBriefReader() {
+  briefReaderPanelEl.hidden = true;
+  briefsArchivePanelEl.hidden = false;
 }
 
 // ─── Sprint 8 F2: Action badge ─────────────────────────────────
@@ -616,7 +764,7 @@ function createNoteCard(note) {
   // Sprint 8 F7: relative timestamp
   const tsStr = getRelativeTime(note.createdAt);
   const tsHtml = note.createdAt
-    ? `<span class="note-card__timestamp" data-ts="${note.createdAt}">${escapeHtml(tsStr)}</span>`
+    ? `<span class="note-card__timestamp" data-ts="${Number(note.createdAt)||0}">${escapeHtml(tsStr)}</span>`
     : "";
 
   card.innerHTML = `
@@ -1039,8 +1187,6 @@ function hideBrief() {
   briefPanel.hidden = true;
   briefContent.hidden = false;
   briefGenerating.hidden = true;
-  // Reset brief history collapsible
-  if (briefHistoryDetails) briefHistoryDetails.open = false;
 
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
@@ -1131,21 +1277,48 @@ async function loadSettingsPanel() {
     }
   } catch { /* */ }
 
-  // Brief sort radios — sync to current state
-  briefSortRadios.forEach((radio) => {
-    radio.checked = radio.value === briefSortMode;
-  });
 }
 
 settingsBtn.addEventListener("click", showSettings);
 closeSettingsBtn.addEventListener("click", hideSettings);
 
-// Brief sort persistence
-briefSortRadios.forEach((radio) => {
-  radio.addEventListener("change", () => {
-    briefSortMode = radio.value;
+// Brief sort pill toggle
+briefSortBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    briefSortMode = btn.dataset.sort;
     chrome.storage.local.set({ markup_brief_sort: briefSortMode });
+    briefSortBtns.forEach((b) => b.classList.toggle("brief-sort-btn--active", b.dataset.sort === briefSortMode));
   });
+});
+
+// Briefs Archive
+briefsArchiveBtn.addEventListener("click", showBriefsArchive);
+closeBriefArchiveBtn.addEventListener("click", hideBriefsArchive);
+
+// Brief Reader
+closeBriefReaderBtn.addEventListener("click", hideBriefReader);
+
+copyBriefReaderBtn.addEventListener("click", async () => {
+  if (!briefReaderCurrentBrief) return;
+  try {
+    await navigator.clipboard.writeText(briefReaderCurrentBrief.markdown);
+    copyBriefReaderBtn.textContent = "Copied!";
+    setTimeout(() => { copyBriefReaderBtn.textContent = "Copy to Clipboard"; }, 2000);
+  } catch {
+    showToast("Copy failed — try again.");
+  }
+});
+
+downloadBriefReaderBtn.addEventListener("click", () => {
+  if (!briefReaderCurrentBrief) return;
+  const dateStr = new Date(briefReaderCurrentBrief.timestamp).toISOString().slice(0, 10);
+  const blob = new Blob([briefReaderCurrentBrief.markdown], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `markup-brief-${dateStr}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 // Settings: Clear all notes for this page
@@ -1316,13 +1489,13 @@ async function loadTabState(tab) {
   }
   renderNotesList();
   updateBadge(); // Sprint 8 F2: sync badge on tab load
-  await renderBriefHistory(); // Sprint 8 F1: pre-load history list
 
   if (currentTabId) {
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: currentTabId },
-        func: () => window.__markupActive === true,
+        func: (extId) => window["__mkp_" + extId + "_active"] === true,
+        args: [chrome.runtime.id],
       });
       if (results?.[0]?.result === true) {
         markupEverActivated = true;
@@ -1353,11 +1526,11 @@ async function init() {
     document.getElementById("version-text").textContent = `getmarkup.dev · v${manifest.version}`;
   } catch { /* not critical */ }
 
-  // Sprint 8 F10: load brief sort setting
+  // Load brief sort setting — sync pill toggle
   try {
     const stored = await safeGet("markup_brief_sort", "severity");
     briefSortMode = stored;
-    briefSortRadios.forEach((r) => { r.checked = r.value === briefSortMode; });
+    briefSortBtns.forEach((b) => b.classList.toggle("brief-sort-btn--active", b.dataset.sort === briefSortMode));
   } catch { /* */ }
 
   // Sprint 8 F7: start timestamp refresh interval

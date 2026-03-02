@@ -17,6 +17,7 @@
       <span class="markup-title">Markup</span>
       <span class="markup-note-count" id="note-count">0 notes</span>
       <button class="btn-clear-all" id="clear-all" hidden>Clear all</button>
+      <button class="icon-btn" id="briefs-archive-btn" aria-label="Open Briefs Archive">📄</button>
       <button class="icon-btn" id="settings-btn" aria-label="Settings">⚙</button>
       <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
     </header>
@@ -74,11 +75,6 @@
         <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
         <button class="btn-copy-brief" id="download-brief">Download .md</button>
       </div>
-      <!-- Sprint 8 F1: Past Briefs collapsible section -->
-      <details class="brief-history-details" id="brief-history-details">
-        <summary class="brief-history-summary" id="brief-history-summary">Past Briefs</summary>
-        <div class="brief-history-items" id="brief-history-items"></div>
-      </details>
     </div>
 
     <!-- Note pending prompt -->
@@ -134,6 +130,10 @@
 
     <!-- 8 · Generate Brief -->
     <div class="markup-actions" id="markup-actions">
+      <div class="brief-sort-toggle" id="brief-sort-toggle">
+        <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">BY SEVERITY</button>
+        <button class="brief-sort-btn" data-sort="chronological">BY ORDER</button>
+      </div>
       <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
         Generate Brief ↗
       </button>
@@ -152,19 +152,6 @@
         <span class="settings-panel__title">Settings</span>
       </div>
       <div class="settings-panel__body">
-
-        <!-- Brief Sort -->
-        <section class="settings-section">
-          <h3 class="settings-section__title">Brief Sort</h3>
-          <label class="settings-radio">
-            <input type="radio" name="brief-sort" value="severity" checked />
-            <span>Severity-grouped</span>
-          </label>
-          <label class="settings-radio">
-            <input type="radio" name="brief-sort" value="chronological" />
-            <span>Chronological</span>
-          </label>
-        </section>
 
         <!-- Export Notes -->
         <section class="settings-section">
@@ -192,6 +179,29 @@
           <span class="settings-version" id="settings-version"></span>
         </section>
 
+      </div>
+    </div>
+
+    <!-- Briefs Archive panel -->
+    <div class="briefs-archive-panel" id="briefs-archive-panel" hidden>
+      <div class="briefs-archive__toolbar">
+        <button class="brief-back-link" id="close-briefs-archive">← Back</button>
+        <span class="briefs-archive__title">Briefs Archive</span>
+        <span class="briefs-archive__count" id="briefs-archive-count"></span>
+      </div>
+      <div class="briefs-archive__list" id="briefs-archive-list"></div>
+    </div>
+
+    <!-- Brief Reader panel -->
+    <div class="brief-reader-panel" id="brief-reader-panel" hidden>
+      <div class="brief-reader__toolbar">
+        <button class="brief-back-link" id="close-brief-reader">← Archive</button>
+        <span class="brief-reader__name" id="brief-reader-name"></span>
+      </div>
+      <pre class="brief-panel__content" id="brief-reader-content"></pre>
+      <div class="brief-panel__footer">
+        <button class="btn-copy-brief" id="copy-brief-reader">Copy to Clipboard</button>
+        <button class="btn-copy-brief" id="download-brief-reader">Download .md</button>
       </div>
     </div>
 
