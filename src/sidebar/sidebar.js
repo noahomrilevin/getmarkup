@@ -51,6 +51,7 @@ let toastTimeout          = null;
 let activeFilter          = "all";  // severity filter state
 let ignoreNextDeselect    = false;  // Bug 4: prevent clearSelectorBtn from triggering flushSave
 let pendingElementSelector = null;  // Bug 7: selector waiting when user has unsaved text
+let currentBriefView      = "current"; // "current" | "history-list" | "history-item"
 
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
@@ -75,6 +76,9 @@ const briefGenerating    = document.getElementById("brief-generating");
 const copyBriefBtn       = document.getElementById("copy-brief");
 const downloadBriefBtn   = document.getElementById("download-brief");
 const closeBriefBtn      = document.getElementById("close-brief");
+const briefHistoryToggle = document.getElementById("brief-history-toggle");
+const briefHistoryList   = document.getElementById("brief-history-list");
+const briefPanelFooter   = document.getElementById("brief-panel-footer");
 const formArea           = document.querySelector(".markup-form-area");
 const clearAllBtn        = document.getElementById("clear-all");
 const clearConfirmEl     = document.getElementById("clear-confirm");
@@ -380,6 +384,100 @@ async function writeBackup() {
   const updated = [...existing, backup].slice(-3);
   await new Promise((resolve) => chrome.storage.local.set({ [backupKey]: updated }, resolve));
   console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
+}
+
+// ─── Brief history storage ─────────────────────────────────────
+// Saves the last 10 generated briefs per URL.
+// Key: markup_briefs_${normalizedUrl}  Value: [{ id, timestamp, noteCount, markdown }]
+function loadBriefs() {
+  const key = `markup_briefs_${currentNoteUrl}`;
+  return new Promise((resolve) => {
+    chrome.storage.local.get(key, (data) => {
+      resolve(data[key] || []);
+    });
+  });
+}
+
+async function saveBrief(markdown) {
+  if (!currentNoteUrl) return;
+  const key = `markup_briefs_${currentNoteUrl}`;
+  const existing = await loadBriefs();
+  const entry = {
+    id: generateId(),
+    timestamp: Date.now(),
+    noteCount: notes.length,
+    markdown,
+  };
+  const updated = [...existing, entry].slice(-10); // keep last 10 per URL
+  chrome.storage.local.set({ [key]: updated });
+}
+
+// ─── Brief panel view state ────────────────────────────────────
+// Controls which of the three brief views is visible:
+//   "current"      — the just-generated brief
+//   "history-list" — the list of past briefs for this URL
+//   "history-item" — a past brief being reviewed
+function setBriefView(view) {
+  currentBriefView = view;
+  const isHistoryList = view === "history-list";
+  const isHistoryItem = view === "history-item";
+
+  // Toolbar right button: hidden in list view; changes label in item view
+  briefHistoryToggle.hidden   = isHistoryList;
+  briefHistoryToggle.textContent = isHistoryItem ? "← List" : "History";
+
+  // Content areas
+  briefHistoryList.hidden = !isHistoryList;
+  briefContent.hidden     = isHistoryList;
+
+  // Footer (copy/download): visible for both current and history-item, not list
+  briefPanelFooter.hidden = isHistoryList;
+
+  // Generating animation: only for current generation; kill it on any view switch
+  if (view !== "current") briefGenerating.hidden = true;
+}
+
+// ─── Show past briefs list ─────────────────────────────────────
+async function showBriefHistory() {
+  setBriefView("history-list");
+  briefHistoryList.innerHTML = "";
+
+  const briefs = await loadBriefs();
+
+  if (briefs.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "brief-history-empty";
+    empty.textContent = "No past briefs for this page yet.";
+    briefHistoryList.appendChild(empty);
+    return;
+  }
+
+  // Newest first
+  [...briefs].reverse().forEach((brief) => {
+    const item = document.createElement("div");
+    item.className = "brief-history-item";
+
+    const date = new Date(brief.timestamp).toLocaleString("en-US", {
+      weekday: "short", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit",
+    });
+    const count = `${brief.noteCount} note${brief.noteCount === 1 ? "" : "s"}`;
+
+    item.innerHTML = `
+      <div class="brief-history-item__meta">
+        <span class="brief-history-item__date">${escapeHtml(date)}</span>
+        <span class="brief-history-item__count">${escapeHtml(count)}</span>
+      </div>
+      <button class="btn-history-view">View →</button>
+    `;
+
+    item.querySelector(".btn-history-view").addEventListener("click", () => {
+      briefContent.textContent = brief.markdown;
+      setBriefView("history-item");
+    });
+
+    briefHistoryList.appendChild(item);
+  });
 }
 
 // ─── Filter tab count badges (Fix 3) ───────────────────────────
@@ -823,6 +921,9 @@ function showBrief() {
   formArea.hidden = true;
   filterTabsEl.hidden = true;
 
+  // Reset to current-brief view before showing panel
+  setBriefView("current");
+
   // Show panel in generating state
   briefContent.hidden = true;
   briefGenerating.hidden = false;
@@ -830,16 +931,25 @@ function showBrief() {
 
   // Brief generation is instant — add a short delay for visual feedback
   setTimeout(() => {
-    briefContent.textContent = buildBriefText();
+    const briefText = buildBriefText();
+    briefContent.textContent = briefText;
     briefGenerating.hidden = true;
     briefContent.hidden = false;
+    saveBrief(briefText); // persist to history
   }, 400);
 }
 
 function hideBrief() {
   briefPanel.hidden = true;
+  // Reset brief panel internal state
   briefContent.hidden = false;
   briefGenerating.hidden = true;
+  briefHistoryList.hidden = true;
+  briefPanelFooter.hidden = false;
+  briefHistoryToggle.hidden = false;
+  briefHistoryToggle.textContent = "History";
+  currentBriefView = "current";
+  // Restore main views
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
   formArea.hidden = false;
@@ -880,6 +990,13 @@ downloadBriefBtn.addEventListener("click", () => {
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
+
+briefHistoryToggle.addEventListener("click", async () => {
+  if (currentBriefView === "current" || currentBriefView === "history-item") {
+    await showBriefHistory();
+  }
+  // In "history-list" view the toggle is hidden — this handler won't fire
+});
 
 // ─── Messages from content script and background ───────────────
 chrome.runtime.onMessage.addListener((message) => {

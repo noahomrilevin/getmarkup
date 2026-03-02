@@ -58,6 +58,7 @@
     <div class="brief-panel" id="brief-output" hidden>
       <div class="brief-panel__toolbar">
         <button class="brief-back-link" id="close-brief">← Back to Notes</button>
+        <button class="brief-history-toggle" id="brief-history-toggle">History</button>
       </div>
       <div class="brief-generating" id="brief-generating" hidden>
         <div class="brief-generating__dots">
@@ -65,8 +66,10 @@
         </div>
         <p class="brief-generating__text">Building brief…</p>
       </div>
+      <!-- Past briefs list (toggled by History button) -->
+      <div class="brief-history-list" id="brief-history-list" hidden></div>
       <pre class="brief-panel__content" id="brief-content"></pre>
-      <div class="brief-panel__footer">
+      <div class="brief-panel__footer" id="brief-panel-footer">
         <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
         <button class="btn-copy-brief" id="download-brief">Download .md</button>
       </div>

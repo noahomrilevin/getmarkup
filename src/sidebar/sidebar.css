@@ -561,6 +561,7 @@ html, body {
 .brief-panel__toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid rgba(250, 248, 243, 0.1);
   flex-shrink: 0;
@@ -1067,4 +1068,99 @@ html, body {
   letter-spacing: 0.1em;
   color: var(--slate);
   opacity: 0.5;
+}
+
+/* ─── Brief history toggle button ─────────────────────────────── */
+.brief-history-toggle {
+  background: transparent;
+  border: 1px solid rgba(250, 248, 243, 0.2);
+  color: rgba(250, 248, 243, 0.5);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.brief-history-toggle:hover {
+  color: var(--warm-white);
+  border-color: rgba(250, 248, 243, 0.4);
+}
+
+/* ─── Brief history list ──────────────────────────────────────── */
+.brief-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.brief-history-empty {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  color: rgba(250, 248, 243, 0.35);
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.brief-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid rgba(250, 248, 243, 0.1);
+  border-radius: var(--radius-m);
+  background: rgba(250, 248, 243, 0.04);
+  transition: background 0.15s ease;
+}
+
+.brief-history-item:hover {
+  background: rgba(250, 248, 243, 0.07);
+}
+
+.brief-history-item__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brief-history-item__date {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  color: var(--warm-white);
+}
+
+.brief-history-item__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(250, 248, 243, 0.4);
+}
+
+.btn-history-view {
+  background: transparent;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--gold);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-history-view:hover {
+  background: var(--gold);
+  color: var(--ink);
 }
