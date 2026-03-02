@@ -12,19 +12,15 @@
 <body>
   <div class="markup-sidebar">
 
-    <!-- Header -->
+    <!-- 1 · Header: title, note count, close -->
     <header class="markup-header">
       <span class="markup-title">Markup</span>
       <span class="markup-note-count" id="note-count">0 notes</span>
       <button class="btn-clear-all" id="clear-all" hidden>Clear all</button>
-      <button class="toggle-btn" id="markup-toggle" aria-pressed="false">Off</button>
       <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
     </header>
 
-    <!-- Activation error hint — shown only when content script can't be reached -->
-    <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
-
-    <!-- Session title -->
+    <!-- 2 · Session title -->
     <div class="session-title-wrap" id="session-title-wrap">
       <input
         class="session-title-input"
@@ -34,9 +30,19 @@
         autocomplete="off"
         spellcheck="false"
       />
+      <span class="viewing-url-text" id="viewing-url-text"></span>
     </div>
 
-    <!-- Notes list -->
+    <!-- Filter tabs (part of notes view) -->
+    <div class="filter-tabs" id="filter-tabs">
+      <button class="filter-tab filter-tab--active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="critical">Critical</button>
+      <button class="filter-tab" data-filter="high">High</button>
+      <button class="filter-tab" data-filter="medium">Medium</button>
+      <button class="filter-tab" data-filter="low">Low</button>
+    </div>
+
+    <!-- 3 · Notes list (or empty state) -->
     <div class="markup-notes" id="notes-list" aria-label="Notes" aria-live="polite">
       <div class="empty-state" id="empty-state"></div>
     </div>
@@ -53,6 +59,12 @@
       <div class="brief-panel__toolbar">
         <button class="brief-back-link" id="close-brief">← Back to Notes</button>
       </div>
+      <div class="brief-generating" id="brief-generating" hidden>
+        <div class="brief-generating__dots">
+          <span>·</span><span>·</span><span>·</span>
+        </div>
+        <p class="brief-generating__text">Building brief…</p>
+      </div>
       <pre class="brief-panel__content" id="brief-content"></pre>
       <div class="brief-panel__footer">
         <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
@@ -60,7 +72,14 @@
       </div>
     </div>
 
-    <!-- Note form -->
+    <!-- Note pending prompt — shown when selecting new element with unsaved text -->
+    <div class="note-pending-prompt" id="note-pending-prompt" hidden>
+      <span class="note-pending-prompt__msg">Save note before switching?</span>
+      <button class="note-pending-prompt__save" id="note-pending-save">Save</button>
+      <button class="note-pending-prompt__discard" id="note-pending-discard">Discard</button>
+    </div>
+
+    <!-- 4–6 · Note form: selector row, type picker, severity picker, textarea -->
     <div class="markup-form-area">
       <form class="note-form" id="note-form" autocomplete="off">
         <div class="selector-row">
@@ -82,6 +101,13 @@
           <button type="button" class="type-btn" data-type="question" data-tooltip="Question or decision needed" aria-pressed="false">?</button>
         </div>
 
+        <div class="note-form__severities" role="group" aria-label="Severity">
+          <button type="button" class="severity-btn severity-btn--critical" data-severity="critical" data-tooltip="Must fix before launch" aria-pressed="false">Critical</button>
+          <button type="button" class="severity-btn severity-btn--high" data-severity="high" data-tooltip="Important, fix soon" aria-pressed="false">High</button>
+          <button type="button" class="severity-btn severity-btn--medium severity-btn--active" data-severity="medium" data-tooltip="Should fix" aria-pressed="true">Medium</button>
+          <button type="button" class="severity-btn severity-btn--low" data-severity="low" data-tooltip="Nice to have" aria-pressed="false">Low</button>
+        </div>
+
         <textarea
           class="note-form__input"
           id="note-input"
@@ -89,20 +115,36 @@
           rows="3"
           aria-label="Note text"
         ></textarea>
-        <span class="save-hint">Cmd+Enter to save</span>
       </form>
+
+      <!-- 7 · Save row: button (half-width, left) + shortcut hint (half-width, right) -->
+      <div class="save-row">
+        <button class="btn-save" type="button" id="save-note">Save Note</button>
+        <span class="save-hint">Cmd+Enter to save</span>
+      </div>
     </div>
 
-    <!-- Actions footer -->
+    <!-- 8 · Generate Brief -->
     <div class="markup-actions">
-      <button class="btn-save" id="save-note" disabled aria-disabled="true">Save Note</button>
       <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
         Generate Brief ↗
       </button>
     </div>
 
+    <!-- 9–11 · Divider + toggle + activation hint -->
+    <div class="markup-toggle-section">
+      <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="Toggle element selection mode">Elements OFF</button>
+      <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
+    </div>
+
     <!-- Toast notification -->
     <div class="toast" id="toast" hidden></div>
+
+    <!-- 12 · Version footer -->
+    <div class="markup-version-footer">
+      <span class="markup-version-footer__text" id="version-text"></span>
+    </div>
+
 
   </div>
 

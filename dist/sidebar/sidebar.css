@@ -138,6 +138,7 @@ html, body {
   flex-direction: column;
   height: 100vh;
   background: var(--paper);
+  position: relative; /* Fix 1: nav-overlay uses position:absolute inset:0 */
   /* No overflow set — Chrome Side Panel frame constrains width.
      Removing overflow-x:hidden lets tooltip ::after render without clipping. */
 }
@@ -177,14 +178,6 @@ html, body {
 }
 .markup-header .icon-btn:hover {
   color: var(--warm-white);
-}
-.markup-header .toggle-btn {
-  border-color: rgba(250, 248, 243, 0.2);
-  color: rgba(250, 248, 243, 0.6);
-  font-family: var(--font-mono);
-  font-size: var(--size-xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 /* ─── Activation hint ────────────────────────────────────────── */
@@ -301,11 +294,15 @@ html, body {
 
 /* ─── Actions footer ──────────────────────────────────────────── */
 .markup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--paper);
 }
+
 
 /* ─── NoteTypeTag ─────────────────────────────────────────────── */
 .note-type-tag {
@@ -513,8 +510,6 @@ html, body {
   font-size: var(--size-base);
   font-weight: 600;
   cursor: pointer;
-  width: 100%;
-  margin-bottom: var(--space-xs);
   transition: opacity 0.2s ease;
 }
 
@@ -552,7 +547,6 @@ html, body {
   color: var(--slate);
   letter-spacing: 0.06em;
   text-align: right;
-  display: block;
 }
 
 /* ─── Brief panel ─────────────────────────────────────────────── */
@@ -755,6 +749,58 @@ html, body {
   color: var(--foreground);
 }
 
+/* ─── Note pending prompt (Bug 7) ────────────────────────────── */
+/* Shown when user selects a new element while there's unsaved text. */
+.note-pending-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: rgba(45, 74, 138, 0.06);
+  border-bottom: 1px solid rgba(45, 74, 138, 0.15);
+  flex-shrink: 0;
+}
+
+.note-pending-prompt__msg {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  color: var(--foreground);
+  flex: 1;
+}
+
+.note-pending-prompt__save,
+.note-pending-prompt__discard {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.note-pending-prompt__save {
+  color: var(--mid-blue);
+  border-color: rgba(45, 74, 138, 0.4);
+}
+
+.note-pending-prompt__save:hover {
+  background: var(--mid-blue);
+  color: var(--warm-white);
+}
+
+.note-pending-prompt__discard {
+  color: var(--muted-foreground);
+}
+
+.note-pending-prompt__discard:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
 /* ─── Brief back link ─────────────────────────────────────────── */
 .brief-back-link {
   background: transparent;
@@ -779,4 +825,246 @@ html, body {
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid rgba(250, 248, 243, 0.1);
   flex-shrink: 0;
+}
+
+/* ─── Brief generating animation ─────────────────────────────── */
+.brief-generating {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.brief-generating__text {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(250, 248, 243, 0.5);
+}
+
+.brief-generating__dots {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+@keyframes markup-pulse {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 1; }
+}
+
+.brief-generating__dots span {
+  color: var(--gold);
+  font-size: 20px;
+  line-height: 1;
+  animation: markup-pulse 1.2s ease-in-out infinite;
+}
+
+.brief-generating__dots span:nth-child(2) { animation-delay: 0.2s; }
+.brief-generating__dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ─── Severity picker buttons ─────────────────────────────────── */
+.note-form__severities {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.severity-btn {
+  position: relative;
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.severity-btn:hover {
+  color: var(--ink);
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+/* Active severity — each level uses its semantic color */
+.severity-btn--active.severity-btn--critical { background: var(--color-error);   color: var(--color-error-fg);   border-color: transparent; }
+.severity-btn--active.severity-btn--high     { background: var(--color-warning); color: var(--color-warning-fg); border-color: transparent; }
+.severity-btn--active.severity-btn--medium   { background: var(--color-info);    color: var(--color-info-fg);    border-color: transparent; }
+.severity-btn--active.severity-btn--low      { background: var(--muted);         color: var(--muted-foreground); border-color: transparent; }
+
+/* CSS-only tooltips on severity buttons */
+.severity-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--deep-blue);
+  color: var(--warm-white);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: var(--radius-m);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 0.2s ease;
+}
+
+.severity-btn[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+/* ─── Severity badge on note cards ────────────────────────────── */
+.note-severity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-m);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.note-severity-badge--critical { background: var(--color-error);   color: var(--color-error-fg); }
+.note-severity-badge--high     { background: var(--color-warning); color: var(--color-warning-fg); }
+.note-severity-badge--medium   { background: var(--color-info);    color: var(--color-info-fg); }
+.note-severity-badge--low      { background: var(--muted);         color: var(--muted-foreground); }
+
+/* Note card header tag group */
+.note-card__tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+/* ─── Filter tabs ─────────────────────────────────────────────── */
+.filter-tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+
+.filter-tab {
+  padding: 2px var(--space-sm);
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius-m);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.filter-tab:hover {
+  color: var(--foreground);
+}
+
+.filter-tab--active {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* ─── Filter tab count badges (Fix 3) ────────────────────────── */
+.filter-tab__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-left: 2px;
+  color: var(--slate);
+}
+
+/* Non-active tabs with 1+ notes get a gold count */
+.filter-tab:not(.filter-tab--active) .filter-tab__count--nonzero {
+  color: var(--gold);
+}
+
+/* ─── Toggle section (Fix 2) ─────────────────────────────────── */
+/* Below Generate Brief, separated by a border line */
+.markup-toggle-section {
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  background: var(--paper);
+}
+
+.markup-toggle-section .toggle-btn {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--size-sm);
+  text-align: center;
+}
+
+/* Activation hint inside toggle section — no banner bg, no bottom border */
+.markup-toggle-section .activation-hint {
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  text-align: left;
+}
+
+/* ─── Save row (Fix 2) ────────────────────────────────────────── */
+/* Half-width Save Note button (left) + shortcut hint (right) */
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.save-row .btn-save {
+  flex: 1;
+}
+
+.save-row .save-hint {
+  flex: 1;
+  text-align: right;
+}
+
+/* ─── Viewing URL line (Fix 1) ────────────────────────────────── */
+.viewing-url-text {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--slate);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
+/* ─── Version footer ──────────────────────────────────────────── */
+.markup-version-footer {
+  padding: 4px var(--space-md);
+  border-top: 1px solid var(--border);
+  text-align: right;
+  flex-shrink: 0;
+  background: var(--paper);
+}
+
+.markup-version-footer__text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--slate);
+  opacity: 0.5;
 }

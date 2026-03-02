@@ -16,5 +16,13 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Markup: side panel registered");
 });
 
-// Notes are keyed by normalized URL (not tabId), so they persist across tab closes.
-// No cleanup needed on tab removal.
+// Fix 1: When the active tab navigates to a new URL, silently notify the sidebar
+// so it refreshes to show the new page's notes. Notes are always safe — no overlay.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]?.id !== tabId) return; // only care about the visible tab
+    chrome.runtime.sendMessage({ type: "TAB_URL_CHANGED", tabId })
+      .catch(() => { /* sidebar not open */ });
+  });
+});

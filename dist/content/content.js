@@ -676,11 +676,15 @@
   // src/content/content.js
   console.log("Markup content script ready");
   var RING_ID = "__markup-ring";
+  var RING_LABEL_ID = "__markup-ring-label";
+  var ESC_HINT_ID = "__markup-esc-hint";
   var CURSOR_STYLE_ID = "__markup-cursor";
   var HIGHLIGHT_COLOR = "#FF8400";
   var ring = null;
   var selectedEl = null;
   var isActive = false;
+  var mutationObserver = null;
+  var reposTimeout = null;
   window.__markupReady = true;
   window.__markupActive = false;
   function injectCursorOverride() {
@@ -693,44 +697,118 @@
   function removeCursorOverride() {
     document.getElementById(CURSOR_STYLE_ID)?.remove();
   }
+  function startMutationObserver() {
+    if (mutationObserver) return;
+    const target = document.body || document.documentElement;
+    mutationObserver = new MutationObserver(() => {
+      if (!isActive || !selectedEl) return;
+      if (reposTimeout) clearTimeout(reposTimeout);
+      reposTimeout = setTimeout(() => {
+        reposTimeout = null;
+        if (isActive && selectedEl) positionRing(selectedEl);
+      }, 300);
+    });
+    mutationObserver.observe(target, { childList: true, subtree: true });
+  }
+  function stopMutationObserver() {
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
+    }
+    if (reposTimeout) {
+      clearTimeout(reposTimeout);
+      reposTimeout = null;
+    }
+  }
   function ensureRing() {
     if (!isActive) return ring;
     if (ring) return ring;
     ring = document.createElement("div");
     ring.id = RING_ID;
-    Object.assign(ring.style, {
-      position: "fixed",
-      pointerEvents: "none",
-      zIndex: "2147483646",
-      // Fix 1: start in hover style (dashed, 50% opacity)
-      border: "2px dashed rgba(255, 132, 0, 0.5)",
+    ring.style.cssText = [
+      "all: initial",
+      "position: fixed !important",
+      "pointer-events: none !important",
+      "z-index: 2147483646 !important",
+      "border: 2px dashed rgba(255, 132, 0, 0.5) !important",
+      "border-radius: 2px !important",
+      "box-sizing: border-box !important",
+      "display: none !important",
+      "overflow: visible !important"
+    ].join("; ");
+    const label = document.createElement("span");
+    label.id = RING_LABEL_ID;
+    label.textContent = "LOCKED";
+    Object.assign(label.style, {
+      position: "absolute",
+      top: "-18px",
+      left: "0",
+      background: HIGHLIGHT_COLOR,
+      color: "#fff",
+      fontSize: "9px",
+      fontFamily: "monospace",
+      letterSpacing: "0.1em",
+      textTransform: "uppercase",
+      padding: "1px 5px",
       borderRadius: "2px",
-      boxSizing: "border-box",
-      display: "none"
+      opacity: "0",
+      pointerEvents: "none",
+      lineHeight: "1.4",
+      whiteSpace: "nowrap"
     });
+    ring.appendChild(label);
     document.documentElement.appendChild(ring);
     return ring;
   }
   function setRingMode(mode) {
     const r = ensureRing();
+    const label = document.getElementById(RING_LABEL_ID);
     if (mode === "selected") {
-      r.style.border = `2px solid ${HIGHLIGHT_COLOR}`;
+      r.style.setProperty("border", `2px solid ${HIGHLIGHT_COLOR}`, "important");
+      if (label) label.style.opacity = "1";
     } else {
-      r.style.border = "2px dashed rgba(255, 132, 0, 0.5)";
+      r.style.setProperty("border", "2px dashed rgba(255, 132, 0, 0.5)", "important");
+      if (label) label.style.opacity = "0";
     }
+  }
+  function showEscHint() {
+    if (document.getElementById(ESC_HINT_ID)) return;
+    const hint = document.createElement("div");
+    hint.id = ESC_HINT_ID;
+    hint.textContent = "Press Esc to deselect";
+    Object.assign(hint.style, {
+      position: "fixed",
+      top: "12px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(26, 39, 68, 0.92)",
+      color: "#FAF8F3",
+      fontSize: "11px",
+      fontFamily: "monospace",
+      letterSpacing: "0.08em",
+      padding: "4px 12px",
+      borderRadius: "4px",
+      zIndex: "2147483645",
+      pointerEvents: "none",
+      whiteSpace: "nowrap"
+    });
+    document.documentElement.appendChild(hint);
+  }
+  function hideEscHint() {
+    document.getElementById(ESC_HINT_ID)?.remove();
   }
   function positionRing(el) {
     if (!isActive) return;
     const r = ensureRing();
     const rect = el.getBoundingClientRect();
-    r.style.display = "block";
-    r.style.top = rect.top + "px";
-    r.style.left = rect.left + "px";
-    r.style.width = rect.width + "px";
-    r.style.height = rect.height + "px";
+    r.style.setProperty("display", "block", "important");
+    r.style.setProperty("top", rect.top + "px", "important");
+    r.style.setProperty("left", rect.left + "px", "important");
+    r.style.setProperty("width", rect.width + "px", "important");
+    r.style.setProperty("height", rect.height + "px", "important");
   }
   function hideRing() {
-    if (ring) ring.style.display = "none";
+    if (ring) ring.style.setProperty("display", "none", "important");
   }
   function getSelector(el) {
     if (el === document.documentElement || el === document.head || el === document.body || el.id === RING_ID) {
@@ -743,12 +821,19 @@
     }
   }
   function sendToSidebar(message) {
-    chrome.runtime.sendMessage(message).catch(() => {
-    });
+    try {
+      chrome.runtime.sendMessage(message).catch(() => {
+      });
+    } catch (e) {
+      if (e?.message?.includes("Extension context invalidated")) {
+        deactivate();
+      }
+    }
   }
   function clearSelection() {
     selectedEl = null;
     hideRing();
+    hideEscHint();
     sendToSidebar({ type: "ELEMENT_DESELECTED" });
   }
   function onMouseover(e) {
@@ -770,6 +855,7 @@
     sendToSidebar({ type: "ELEMENT_HOVER_END" });
   }
   function onClick(e) {
+    if (!isActive) return;
     const target = e.target;
     if (target === ring || target.id === RING_ID) return;
     e.preventDefault();
@@ -784,6 +870,13 @@
     selectedEl = target;
     setRingMode("selected");
     positionRing(target);
+    showEscHint();
+    console.log(
+      "Markup: selected \u2192",
+      target.tagName + (target.id ? "#" + target.id : "") + (typeof target.className === "string" && target.className ? "." + target.className.trim().split(/\s+/).slice(0, 3).join(".") : ""),
+      "| selector:",
+      selector
+    );
     sendToSidebar({ type: "ELEMENT_SELECTED", selector });
   }
   function onScroll() {
@@ -800,6 +893,7 @@
     hideRing();
     injectCursorOverride();
     ensureRing();
+    startMutationObserver();
     document.addEventListener("mouseover", onMouseover, { capture: true, passive: true });
     document.addEventListener("mouseout", onMouseout, { capture: true, passive: true });
     document.addEventListener("click", onClick, { capture: true });
@@ -813,7 +907,9 @@
     window.__markupActive = false;
     clearSelection();
     hideRing();
+    hideEscHint();
     removeCursorOverride();
+    stopMutationObserver();
     document.removeEventListener("mouseover", onMouseover, { capture: true });
     document.removeEventListener("mouseout", onMouseout, { capture: true });
     document.removeEventListener("click", onClick, { capture: true });

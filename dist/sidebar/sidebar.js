@@ -21,22 +21,36 @@ const TYPE_BRIEF = {
 
 const TYPE_ORDER = ["bug", "design", "copy", "question", "general"];
 
+// ─── Severity config ───────────────────────────────────────────
+const SEVERITY_CONFIG = {
+  critical: { label: "Critical", emoji: "🔴" },
+  high:     { label: "High",     emoji: "🟠" },
+  medium:   { label: "Medium",   emoji: "🟡" },
+  low:      { label: "Low",      emoji: "⚪" },
+};
+
+const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
+
 // ─── State ─────────────────────────────────────────────────────
-let currentSelector     = null;
-let currentNoteId       = null;
-let notes               = [];
-let currentTabId        = null;
-let currentTabUrl       = "";
-let currentNoteUrl      = "";   // Bug 1: normalized URL used as storage key
-let tabTitle            = "";
-let sessionTitle        = "";
-let markupActive        = false;
-let isEditing           = false;
-let editPrevSelector    = null;
-let markupEverActivated = false;
-const undoStack         = [];
-const redoStack         = [];
-let toastTimeout        = null;
+let currentSelector       = null;
+let currentNoteId         = null;
+let notes                 = [];
+let currentTabId          = null;
+let currentWindowId       = null;   // Bug 1: filter onActivated to our window
+let currentTabUrl         = "";
+let currentNoteUrl        = "";     // normalized URL used as storage key
+let tabTitle              = "";
+let sessionTitle          = "";
+let markupActive          = false;
+let isEditing             = false;
+let editPrevSelector      = null;
+let markupEverActivated   = false;
+const undoStack           = [];
+const redoStack           = [];
+let toastTimeout          = null;
+let activeFilter          = "all";  // severity filter state
+let ignoreNextDeselect    = false;  // Bug 4: prevent clearSelectorBtn from triggering flushSave
+let pendingElementSelector = null;  // Bug 7: selector waiting when user has unsaved text
 
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
@@ -53,8 +67,11 @@ const generateBtn        = document.getElementById("generate-brief");
 const saveBtn            = document.getElementById("save-note");
 const toastEl            = document.getElementById("toast");
 const typeButtons        = document.querySelectorAll(".type-btn");
+const severityButtons    = document.querySelectorAll(".severity-btn");
+const filterTabEls       = document.querySelectorAll(".filter-tab");
 const briefPanel         = document.getElementById("brief-output");
 const briefContent       = document.getElementById("brief-content");
+const briefGenerating    = document.getElementById("brief-generating");
 const copyBriefBtn       = document.getElementById("copy-brief");
 const downloadBriefBtn   = document.getElementById("download-brief");
 const closeBriefBtn      = document.getElementById("close-brief");
@@ -64,8 +81,13 @@ const clearConfirmEl     = document.getElementById("clear-confirm");
 const clearConfirmMsgEl  = document.getElementById("clear-confirm-msg");
 const clearConfirmYesBtn = document.getElementById("clear-confirm-yes");
 const clearConfirmNoBtn  = document.getElementById("clear-confirm-no");
-const sessionTitleInput  = document.getElementById("session-title");
-const sessionTitleWrap   = document.getElementById("session-title-wrap");
+const sessionTitleInput    = document.getElementById("session-title");
+const sessionTitleWrap     = document.getElementById("session-title-wrap");
+const filterTabsEl         = document.getElementById("filter-tabs");
+const notePendingPrompt    = document.getElementById("note-pending-prompt");
+const notePendingSaveBtn   = document.getElementById("note-pending-save");
+const notePendingDiscardBtn = document.getElementById("note-pending-discard");
+const viewingUrlText       = document.getElementById("viewing-url-text");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
@@ -80,17 +102,15 @@ function normalizeUrl(url) {
 function setToggleState(active) {
   markupActive = active;
   if (active) {
-    toggleBtn.textContent = "Markup ON";
+    toggleBtn.textContent = "Elements ON";
     toggleBtn.classList.add("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "true");
-    saveBtn.disabled = false;
-    saveBtn.setAttribute("aria-disabled", "false");
     selectorRow.hidden = false;
     if (!currentSelector) {
       selectorDisplay.textContent = "Hover to preview element";
     }
   } else {
-    toggleBtn.textContent = "Markup OFF";
+    toggleBtn.textContent = "Elements OFF";
     toggleBtn.classList.remove("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "false");
     deactivateReset(); // Bug 6: preserves noteInput
@@ -175,7 +195,12 @@ async function sendToggle() {
 toggleBtn.addEventListener("click", sendToggle);
 
 // ─── Close button ──────────────────────────────────────────────
+// Fix 6: deactivate content script before closing so ring and listeners are cleaned up
 closeBtn.addEventListener("click", () => {
+  if (markupActive && currentTabId) {
+    try { chrome.tabs.sendMessage(currentTabId, { type: "MARKUP_DEACTIVATE" }); }
+    catch { /* tab may already be gone */ }
+  }
   window.close();
 });
 
@@ -206,7 +231,7 @@ function updateEmptyState() {
   } else {
     const text = document.createElement("p");
     text.className = "empty-state__text";
-    text.textContent = "Click any element to annotate.";
+    text.textContent = "Click any element to annotate, or save a general note about this page.";
     emptyState.append(text);
   }
 }
@@ -215,6 +240,22 @@ function updateEmptyState() {
 typeButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     setTypePicker(btn.dataset.type);
+  });
+});
+
+// ─── Severity picker ───────────────────────────────────────────
+severityButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSeverityPicker(btn.dataset.severity);
+  });
+});
+
+// ─── Filter tabs ───────────────────────────────────────────────
+filterTabEls.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    activeFilter = tab.dataset.filter;
+    filterTabEls.forEach((t) => t.classList.toggle("filter-tab--active", t.dataset.filter === activeFilter));
+    renderNotesList();
   });
 });
 
@@ -247,6 +288,22 @@ function resetTypePicker() {
   setTypePicker("general");
 }
 
+function getActiveSeverity() {
+  return document.querySelector(".severity-btn--active")?.dataset.severity || "medium";
+}
+
+function setSeverityPicker(severity) {
+  severityButtons.forEach((b) => {
+    const active = b.dataset.severity === severity;
+    b.classList.toggle("severity-btn--active", active);
+    b.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function resetSeverityPicker() {
+  setSeverityPicker("medium");
+}
+
 // ─── Clear selector visibility ─────────────────────────────────
 function updateClearSelectorVisibility() {
   clearSelectorBtn.hidden = !currentSelector;
@@ -267,11 +324,26 @@ function loadNotes() {
   });
 }
 
+// Fix 1: maintain a flat cross-URL index so notes are never lost across navigation
+async function persistAllNotes() {
+  if (!currentNoteUrl) return;
+  const allKey = "markup_all_notes";
+  const existing = await new Promise((resolve) =>
+    chrome.storage.local.get(allKey, (data) => resolve(data[allKey] || []))
+  );
+  // Replace this URL's notes, keep all others
+  const otherNotes = existing.filter((n) => n.url !== currentNoteUrl);
+  chrome.storage.local.set({ [allKey]: [...otherNotes, ...notes] });
+}
+
 function persistNotes() {
   if (!currentNoteUrl) return Promise.resolve();
   const key = `markup_notes_${currentNoteUrl}`;
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: notes }, resolve);
+    chrome.storage.local.set({ [key]: notes }, () => {
+      resolve();
+      persistAllNotes(); // fire-and-forget global index sync
+    });
   });
 }
 
@@ -310,6 +382,30 @@ async function writeBackup() {
   console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
 }
 
+// ─── Filter tab count badges (Fix 3) ───────────────────────────
+// Updates each tab to show "(n)" after its label. Gold for 1+, slate for 0.
+function updateFilterTabCounts() {
+  const counts = {
+    all:      notes.length,
+    critical: notes.filter((n) => (n.severity || "medium") === "critical").length,
+    high:     notes.filter((n) => (n.severity || "medium") === "high").length,
+    medium:   notes.filter((n) => (n.severity || "medium") === "medium").length,
+    low:      notes.filter((n) => (n.severity || "medium") === "low").length,
+  };
+  filterTabEls.forEach((tab) => {
+    const f = tab.dataset.filter;
+    const n = counts[f] ?? 0;
+    let span = tab.querySelector(".filter-tab__count");
+    if (!span) {
+      span = document.createElement("span");
+      span.className = "filter-tab__count";
+      tab.appendChild(span);
+    }
+    span.textContent = `(${n})`;
+    span.classList.toggle("filter-tab__count--nonzero", n > 0);
+  });
+}
+
 // ─── Render ────────────────────────────────────────────────────
 function renderNotesList() {
   notesList.querySelectorAll(".note-card").forEach((c) => c.remove());
@@ -320,16 +416,23 @@ function renderNotesList() {
   generateBtn.disabled = count === 0;
   generateBtn.setAttribute("aria-disabled", count === 0 ? "true" : "false");
 
+  updateFilterTabCounts(); // Fix 3: keep tab counts in sync
   updateEmptyState();
   updateClearAllVisibility();
 
-  notes.forEach((note) => {
+  const visible = activeFilter === "all"
+    ? notes
+    : notes.filter((n) => (n.severity || "medium") === activeFilter);
+
+  visible.forEach((note) => {
     notesList.appendChild(createNoteCard(note));
   });
 }
 
 function createNoteCard(note) {
   const config = TYPE_CONFIG[note.type] || TYPE_CONFIG.general;
+  const severity = note.severity || "medium";
+  const sevConfig = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.medium;
   const card = document.createElement("div");
   card.className = "note-card";
   card.dataset.noteId = note.id;
@@ -345,7 +448,10 @@ function createNoteCard(note) {
 
   card.innerHTML = `
     <div class="note-card__header">
-      <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
+      <div class="note-card__tags">
+        <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
+        <span class="note-severity-badge note-severity-badge--${escapeHtml(severity)}">${sevConfig.label}</span>
+      </div>
       <div class="note-card__actions">
         <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
         <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
@@ -411,7 +517,8 @@ async function flushSave() {
   const text = noteInput.value.trim();
   if (!text) return;
 
-  const type = getActiveType();
+  const type     = getActiveType();
+  const severity = getActiveSeverity();
 
   if (currentNoteId) {
     // Bug 4: always update in place when currentNoteId is set — never insert new.
@@ -422,6 +529,7 @@ async function flushSave() {
       notes[idx] = {
         ...notes[idx],
         type,
+        severity,
         text,
         selector: currentSelector,
         elementName: currentSelector ? null : "General note",
@@ -430,9 +538,11 @@ async function flushSave() {
   } else {
     const note = {
       id: generateId(),
+      url: currentNoteUrl,          // Fix 1: store URL so note is identifiable globally
       selector: currentSelector,
       elementName: currentSelector ? null : "General note",
       type,
+      severity,
       text,
       createdAt: Date.now(),
     };
@@ -454,9 +564,8 @@ function resetForm() {
   selectorRow.hidden = true;
   selectorDisplay.textContent = "";
   saveBtn.textContent = "Save Note";
-  saveBtn.disabled = true;
-  saveBtn.setAttribute("aria-disabled", "true");
   resetTypePicker();
+  resetSeverityPicker();
   updateClearSelectorVisibility();
 }
 
@@ -472,9 +581,8 @@ function deactivateReset() {
   selectorRow.hidden = true;
   selectorDisplay.textContent = "";
   saveBtn.textContent = "Save Note";
-  saveBtn.disabled = true;
-  saveBtn.setAttribute("aria-disabled", "true");
   resetTypePicker();
+  resetSeverityPicker();
   updateClearSelectorVisibility();
 }
 
@@ -483,6 +591,7 @@ function softReset() {
   currentNoteId   = null;
   noteInput.value = "";
   resetTypePicker();
+  resetSeverityPicker();
   noteInput.focus();
 }
 
@@ -494,11 +603,10 @@ function enterEditMode(note) {
   currentSelector  = note.selector;
   noteInput.value  = note.text;
   setTypePicker(note.type);
+  setSeverityPicker(note.severity || "medium");
   selectorRow.hidden = false;
   selectorDisplay.textContent = note.selector || "Hover to preview element";
   saveBtn.textContent = "Update Note";
-  saveBtn.disabled = false;
-  saveBtn.setAttribute("aria-disabled", "false");
   updateClearSelectorVisibility();
   noteInput.focus();
 }
@@ -510,10 +618,9 @@ function exitEditMode() {
   editPrevSelector = null;
   noteInput.value  = "";
   resetTypePicker();
+  resetSeverityPicker();
   saveBtn.textContent = "Save Note";
   selectorDisplay.textContent = currentSelector || "Hover to preview element";
-  saveBtn.disabled = !markupActive;
-  saveBtn.setAttribute("aria-disabled", !markupActive ? "true" : "false");
   updateClearSelectorVisibility();
 }
 
@@ -574,18 +681,16 @@ clearSelectorBtn.addEventListener("click", async () => {
   );
   const tab = tabs[0];
   if (tab?.id) {
+    // Bug 4: flag the incoming ELEMENT_DESELECTED so it doesn't trigger flushSave.
+    // clearSelectorBtn is a local UI action — we don't want to auto-save here.
+    ignoreNextDeselect = true;
     chrome.tabs.sendMessage(tab.id, { type: "MARKUP_DESELECT" });
   }
   currentSelector = null;
   // Bug 4: do NOT clear currentNoteId here.
-  // If in edit mode, currentNoteId must remain set so flushSave() updates in place
-  // rather than inserting a duplicate note.
+  // If in edit mode, currentNoteId must remain set so flushSave() updates in place.
   selectorDisplay.textContent = "Hover to preview element";
   updateClearSelectorVisibility();
-  if (!noteInput.value.trim()) {
-    saveBtn.disabled = !markupActive;
-    saveBtn.setAttribute("aria-disabled", !markupActive ? "true" : "false");
-  }
 });
 
 // ─── Clear all ─────────────────────────────────────────────────
@@ -610,6 +715,41 @@ clearConfirmNoBtn.addEventListener("click", () => {
   updateClearAllVisibility();
 });
 
+// ─── Note pending prompt (Bug 7) ───────────────────────────────
+// Shown when user selects a new element while there is unsaved text.
+notePendingSaveBtn.addEventListener("click", async () => {
+  notePendingPrompt.hidden = true;
+  const sel = pendingElementSelector;
+  pendingElementSelector = null;
+  await flushSave();
+  softReset();
+  if (sel) {
+    currentSelector = sel;
+    currentNoteId   = null;
+    selectorRow.hidden = false;
+    selectorDisplay.textContent = sel;
+    updateClearSelectorVisibility();
+    noteInput.focus();
+  }
+});
+
+notePendingDiscardBtn.addEventListener("click", () => {
+  notePendingPrompt.hidden = true;
+  const sel = pendingElementSelector;
+  pendingElementSelector = null;
+  noteInput.value = "";
+  resetTypePicker();
+  resetSeverityPicker();
+  currentNoteId = null;
+  if (sel) {
+    currentSelector = sel;
+    selectorRow.hidden = false;
+    selectorDisplay.textContent = sel;
+    updateClearSelectorVisibility();
+    noteInput.focus();
+  }
+});
+
 // ─── Brief panel ───────────────────────────────────────────────
 function buildBriefText() {
   const now = new Date();
@@ -622,6 +762,15 @@ function buildBriefText() {
 
   const project = sessionTitle || tabTitle || "Unknown";
 
+  // Severity summary counts
+  const sevCounts = {};
+  for (const s of SEVERITY_ORDER) {
+    sevCounts[s] = notes.filter((n) => (n.severity || "medium") === s).length;
+  }
+  const sevSummary = SEVERITY_ORDER
+    .map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`)
+    .join(" · ");
+
   const lines = [
     `# Markup — Fix Instructions`,
     ``,
@@ -630,26 +779,33 @@ function buildBriefText() {
     `**Reviewed:** ${dateStr} at ${timeStr}`,
     `**Mode:** Self Review`,
     `**Total Issues:** ${notes.length}`,
+    `**Severity:** ${sevSummary}`,
     ``,
     `---`,
   ];
 
-  for (const type of TYPE_ORDER) {
-    const typeNotes = notes.filter((n) => n.type === type);
-    if (typeNotes.length === 0) continue;
+  // Group by severity, sort within severity by type
+  for (const sev of SEVERITY_ORDER) {
+    const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
+    if (sevNotes.length === 0) continue;
 
-    const cfg = TYPE_BRIEF[type];
+    const cfg = SEVERITY_CONFIG[sev];
     lines.push(``);
-    lines.push(`## ${cfg.emoji} ${cfg.label}`);
+    lines.push(`## ${cfg.emoji} ${cfg.label} (${sevNotes.length})`);
 
-    typeNotes.forEach((note, i) => {
+    const sorted = [...sevNotes].sort(
+      (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+    );
+
+    sorted.forEach((note, i) => {
       if (i > 0) lines.push(``);
+      const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
       const elementLabel = note.elementName || note.selector || "No element selected";
-      lines.push(`**Element:** ${elementLabel}`);
+      lines.push(`**[${typeCfg.label}]** ${elementLabel}`);
       if (note.selector) {
         lines.push(`**Selector:** ${note.selector}`);
       }
-      lines.push(`**${cfg.field}:** ${note.text}`);
+      lines.push(`**${typeCfg.field}:** ${note.text}`);
     });
 
     lines.push(``);
@@ -660,19 +816,34 @@ function buildBriefText() {
 }
 
 function showBrief() {
-  briefContent.textContent = buildBriefText();
+  // Hide list and form immediately
   notesList.hidden = true;
   sessionTitleWrap.hidden = true;
   clearConfirmEl.hidden = true;
   formArea.hidden = true;
+  filterTabsEl.hidden = true;
+
+  // Show panel in generating state
+  briefContent.hidden = true;
+  briefGenerating.hidden = false;
   briefPanel.hidden = false;
+
+  // Brief generation is instant — add a short delay for visual feedback
+  setTimeout(() => {
+    briefContent.textContent = buildBriefText();
+    briefGenerating.hidden = true;
+    briefContent.hidden = false;
+  }, 400);
 }
 
 function hideBrief() {
   briefPanel.hidden = true;
+  briefContent.hidden = false;
+  briefGenerating.hidden = true;
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
   formArea.hidden = false;
+  filterTabsEl.hidden = false;
 }
 
 generateBtn.addEventListener("click", () => {
@@ -710,8 +881,20 @@ downloadBriefBtn.addEventListener("click", () => {
 
 closeBriefBtn.addEventListener("click", hideBrief);
 
-// ─── Messages from content script ─────────────────────────────
+// ─── Messages from content script and background ───────────────
 chrome.runtime.onMessage.addListener((message) => {
+  // Fix 1: active tab navigated to a new URL — silently load new page's notes
+  if (message.type === "TAB_URL_CHANGED") {
+    setToggleState(false);
+    noteInput.value = "";
+    activationHint.hidden = true;
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      const tab = tabs[0];
+      if (tab) await loadTabState(tab);
+    });
+    return;
+  }
+
   if (message.type === "MARKUP_ACTIVATED") {
     markupEverActivated = true;
     activationHint.hidden = true;
@@ -723,7 +906,14 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "ELEMENT_SELECTED") {
-    // Flush any unsaved text for the previous element, then set up the new one
+    // Bug 7: user has unsaved text for a new (not-yet-saved) note — prompt before switching.
+    // If editing an existing note (currentNoteId set), auto-save is fine.
+    if (noteInput.value.trim() && !currentNoteId) {
+      pendingElementSelector = message.selector;
+      notePendingPrompt.hidden = false;
+      return;
+    }
+    // No unsaved text, or editing an existing note — proceed normally.
     flushSave().then(() => {
       if (isEditing) {
         isEditing        = false;
@@ -742,6 +932,11 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "ELEMENT_DESELECTED") {
+    // Bug 4: clearSelectorBtn sets this flag so we don't auto-save on its deselect.
+    if (ignoreNextDeselect) {
+      ignoreNextDeselect = false;
+      return;
+    }
     flushSave().then(() => {
       if (isEditing) {
         isEditing        = false;
@@ -780,17 +975,13 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
-// ─── Init ──────────────────────────────────────────────────────
-async function init() {
-  const tabs = await new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-  });
-  const tab = tabs[0];
-  currentTabId  = tab?.id || null;
-  tabTitle      = tab?.title || "";
-  currentTabUrl = tab?.url || "";
-
-  // Bug 1 + Bug 8: derive storage key from normalized URL, not ephemeral tabId
+// ─── Tab state loader (Bug 1) ───────────────────────────────────
+// Shared by init() and chrome.tabs.onActivated — loads notes + session title
+// for a given tab and re-syncs the toggle state.
+async function loadTabState(tab) {
+  currentTabId   = tab?.id    || null;
+  tabTitle       = tab?.title || "";
+  currentTabUrl  = tab?.url   || "";
   currentNoteUrl = currentTabUrl ? normalizeUrl(currentTabUrl) : "";
 
   if (currentNoteUrl) {
@@ -798,11 +989,21 @@ async function init() {
     const stored = await loadSessionTitle();
     sessionTitle = stored !== null ? stored : tabTitle;
     sessionTitleInput.value = sessionTitle;
-    renderNotesList();
+    // Fix 1: show domain so user always knows which page's notes they're viewing
+    if (viewingUrlText) {
+      let domain = currentNoteUrl;
+      try { domain = new URL(currentNoteUrl).hostname; } catch { /* use full url */ }
+      viewingUrlText.textContent = `Viewing notes for ${domain}`;
+    }
+  } else {
+    notes = [];
+    sessionTitle = "";
+    sessionTitleInput.value = "";
+    if (viewingUrlText) viewingUrlText.textContent = "";
   }
+  renderNotesList();
 
-  // Bug 3: if the content script is already active (sidebar was closed and reopened),
-  // sync the sidebar to ON without requiring the user to click toggle again.
+  // Re-sync toggle if the content script is already active on this tab (Bug 3)
   if (currentTabId) {
     try {
       const results = await chrome.scripting.executeScript({
@@ -814,9 +1015,59 @@ async function init() {
         setToggleState(true);
       }
     } catch {
-      // Restricted page or content script unavailable — start in OFF state.
+      // Restricted page or content script unavailable — stay OFF.
     }
   }
+
+  // Bug 6: proactively show hint for restricted pages so users understand immediately
+  // why the toggle won't activate, rather than discovering it after clicking.
+  const url = currentTabUrl;
+  const isRestricted =
+    url.startsWith("chrome://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("about:") ||
+    url.startsWith("edge://");
+  if (isRestricted && !markupActive) {
+    activationHint.textContent = "Markup can't run on this page.";
+    activationHint.hidden = false;
+  }
 }
+
+// ─── Init ──────────────────────────────────────────────────────
+async function init() {
+  // Version footer
+  try {
+    const manifest = chrome.runtime.getManifest();
+    document.getElementById("version-text").textContent = `getmarkup.dev · v${manifest.version}`;
+  } catch { /* not critical */ }
+
+  const tabs = await new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+  });
+  const tab = tabs[0];
+  currentWindowId = tab?.windowId || null; // Bug 1: capture window to filter onActivated
+  await loadTabState(tab);
+}
+
+// ─── Tab switch listener (Bug 1) ───────────────────────────────
+// When the user switches tabs, reload notes and session state for the new tab's URL.
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // Only react to tab changes in the sidebar's own window
+  if (currentWindowId && activeInfo.windowId !== currentWindowId) return;
+
+  // Dismiss any pending-prompt state from the previous tab
+  pendingElementSelector = null;
+  notePendingPrompt.hidden = true;
+  ignoreNextDeselect = false;
+
+  // Reset Markup UI (deactivateReset preserves noteInput, but on tab switch
+  // that text belongs to the old tab's context so we clear it explicitly)
+  setToggleState(false);
+  noteInput.value = "";
+  activationHint.hidden = true;
+
+  const tab = await new Promise((resolve) => chrome.tabs.get(activeInfo.tabId, resolve));
+  await loadTabState(tab);
+});
 
 init();
