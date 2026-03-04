@@ -41,11 +41,15 @@ const BRIEFS_MAX  = 50;
 // ─── Sprint 9: Developer Mode storage key ──────────────────────
 const DEV_MODE_KEY = "markup_dev_mode";
 
+// ─── Sprint 10: Onboarding card storage key ─────────────────────
+const ONBOARDING_KEY = "markup_onboarding_dismissed";
+
 // ─── State ─────────────────────────────────────────────────────
 let currentSelector       = null;
 let currentElementLabel   = null; // Sprint 8 F5: human-readable label
 let currentNoteId         = null;
 let notes                 = [];
+let allNotes              = []; // Pass 5: all notes across all URLs
 let currentTabId          = null;
 let currentWindowId       = null;
 let currentTabUrl         = "";
@@ -62,8 +66,12 @@ let toastTimeout          = null;
 let activeFilter          = "all";
 let ignoreNextDeselect    = false;
 let pendingElementSelector = null;
+let pendingElementLabel    = null; // Pass 12: label paired with pendingElementSelector
 let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
 let briefReaderCurrentBrief = null; // brief object open in reader
+let editingNoteUrl        = null; // Pass 7: URL of note being edited (may differ from currentNoteUrl)
+let briefDomainGroups     = []; // Pass 8: domain-wide note groups collected at brief-generation time
+let currentBriefText        = "";   // raw markdown for copy/download
 let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
 let devMode               = false; // Sprint 9: Developer Mode (false = Simple Mode)
 let iframeNoticeDismissed = false; // Sprint 9: show iframe notice only once
@@ -71,7 +79,6 @@ let iframeNoticeDismissed = false; // Sprint 9: show iframe notice only once
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
 const activationHint     = document.getElementById("activation-hint");
-const closeBtn           = document.getElementById("close-btn");
 const noteCountEl        = document.getElementById("note-count");
 const notesList          = document.getElementById("notes-list");
 const emptyState         = document.getElementById("empty-state");
@@ -130,6 +137,7 @@ const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
 const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
 const briefSortToggleEl  = document.getElementById("brief-sort-toggle");
+const saveHintEl         = document.querySelector(".save-hint");
 // Sprint 9 new DOM refs
 const devBadgeEl         = document.getElementById("dev-badge");
 const devModeToggle      = document.getElementById("dev-mode-toggle");
@@ -137,9 +145,13 @@ const iframeNoticeEl     = document.getElementById("iframe-notice");
 const reloadBtn          = document.getElementById("reload-btn");
 const noteTypesRow       = document.querySelector(".note-form__types");
 const noteSeveritiesRow  = document.querySelector(".note-form__severities");
+const escSelectHintEl    = document.getElementById("esc-select-hint");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
+
+// Pass 12 fix: reposition note-pending-prompt to just above the textarea
+noteInput.before(notePendingPrompt);
 
 // ─── URL normalization ─────────────────────────────────────────
 function normalizeUrl(url) {
@@ -180,7 +192,13 @@ async function safeSet(data) {
 // ─── Sprint 9: Developer Mode ──────────────────────────────────
 function applyDevMode(enabled) {
   devMode = enabled;
-  // Mode chip: DEV or SIMPLE (chip text set here; visibility set by loadDevMode)
+  // Onboarding card: remove when switching to dev, show when switching to simple
+  if (enabled) {
+    document.getElementById("onboarding-card")?.remove();
+  } else {
+    showOnboardingCardIfNeeded();
+  }
+  // Mode chip: DEV when dev mode, SIMPLE when simple mode
   if (devBadgeEl) {
     devBadgeEl.textContent = enabled ? "DEV" : "SIMPLE";
     devBadgeEl.hidden = false;
@@ -214,19 +232,13 @@ function applyDevMode(enabled) {
 }
 
 async function loadDevMode() {
-  // null = never explicitly set → hide chip entirely (S02 state)
   const stored = await safeGet(DEV_MODE_KEY, null);
   if (stored === null) {
-    devMode = true;
-    if (devModeToggle) devModeToggle.checked = true;
-    if (devBadgeEl) devBadgeEl.hidden = true;
-    // Apply developer mode visuals without showing chip (S02 state)
-    if (briefSortToggleEl) briefSortToggleEl.hidden = false;
-    if (noteTypesRow) noteTypesRow.classList.remove("dev-mode-hidden");
-    if (noteSeveritiesRow) noteSeveritiesRow.classList.remove("dev-mode-hidden");
-    if (filterTabsEl) filterTabsEl.hidden = false;
-    if (noteInput) noteInput.placeholder = "Describe the issue… or speak via Wispr Flow";
-    renderNotesList();
+    // New install: default to Simple Mode
+    await safeSet({ [DEV_MODE_KEY]: false });
+    devMode = false;
+    if (devModeToggle) devModeToggle.checked = false;
+    applyDevMode(false);
   } else {
     devMode = !!stored;
     if (devModeToggle) devModeToggle.checked = devMode;
@@ -241,14 +253,39 @@ async function setDevMode(enabled) {
   applyDevMode(enabled);
 }
 
+// ─── Sprint 10: Onboarding card ─────────────────────────────────
+async function showOnboardingCardIfNeeded() {
+  if (devMode) return;
+  const dismissed = await safeGet(ONBOARDING_KEY, false);
+  if (dismissed) return;
+  if (document.getElementById("onboarding-card")) return; // already shown
+
+  const card = document.createElement("div");
+  card.id = "onboarding-card";
+  card.className = "onboarding-card";
+  card.innerHTML = `
+    <p class="onboarding-card__text">You're in Simple Mode. For element selection, severity tagging, and structured briefs — enable Dev Mode in settings.</p>
+    <button class="onboarding-card__cta" id="onboarding-cta">OPEN SETTINGS →</button>
+  `;
+  notesList.prepend(card);
+
+  document.getElementById("onboarding-cta").addEventListener("click", async () => {
+    await safeSet({ [ONBOARDING_KEY]: true });
+    card.remove();
+    showSettings();
+    setTimeout(() => { if (devModeToggle) devModeToggle.focus(); }, 100);
+  });
+}
+
 // ─── Sprint 9: Toggle state ──────────────────────────────────────
 function setToggleState(active) {
   markupActive = active;
   if (active) {
-    toggleBtn.textContent = "Stop Selecting";
+    toggleBtn.textContent = "STOP SELECTING";
     toggleBtn.classList.add("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "true");
-    toggleBtn.setAttribute("aria-label", "Stop Selecting — deactivate element selection");
+    toggleBtn.setAttribute("aria-label", "STOP SELECTING — deactivate element selection");
+    if (escSelectHintEl) escSelectHintEl.hidden = false;
     // In dev mode, show selector row; in simple mode, keep it hidden
     if (devMode) {
       selectorRow.hidden = false;
@@ -258,10 +295,11 @@ function setToggleState(active) {
       }
     }
   } else {
-    toggleBtn.textContent = "Select Element";
+    toggleBtn.textContent = "SELECT ELEMENT";
     toggleBtn.classList.remove("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "false");
-    toggleBtn.setAttribute("aria-label", "Select Element — activate element selection");
+    toggleBtn.setAttribute("aria-label", "SELECT ELEMENT — activate element selection");
+    if (escSelectHintEl) escSelectHintEl.hidden = true;
     deactivateReset();
   }
   updateEmptyState();
@@ -326,24 +364,21 @@ async function sendToggle() {
 
   markupEverActivated = true;
   const msgType = markupActive ? "MARKUP_DEACTIVATE" : "MARKUP_ACTIVATE";
+  // Suppress the ELEMENT_DESELECTED that deactivate() fires via clearSelection()
+  // so flushSave() is not called when the user clicks SELECT ELEMENT to turn off.
+  if (markupActive) ignoreNextDeselect = true;
   chrome.tabs.sendMessage(tab.id, { type: msgType });
 }
 
 toggleBtn.addEventListener("click", sendToggle);
 
 // ─── Close button ──────────────────────────────────────────────
-closeBtn.addEventListener("click", () => {
-  if (markupActive && currentTabId) {
-    try { chrome.tabs.sendMessage(currentTabId, { type: "MARKUP_DEACTIVATE" }); }
-    catch { /* tab may already be gone */ }
-  }
-  window.close();
-});
-
 // ─── Empty state (Sprint 9 — 2e) ───────────────────────────────
 function updateEmptyState() {
   emptyState.innerHTML = "";
-  if (notes.length > 0) {
+  // Pass 8: hide empty state if ANY note exists on this domain (not just current URL)
+  const domainTotal = notes.length + allNotes.length;
+  if (domainTotal > 0) {
     emptyState.style.display = "none";
     return;
   }
@@ -465,7 +500,7 @@ function updateClearSelectorVisibility() {
 }
 
 function updateClearAllVisibility() {
-  clearAllBtn.hidden = notes.length === 0;
+  if (clearAllBtn) clearAllBtn.hidden = notes.length === 0;
 }
 
 // ─── Storage — notes ──────────────────────────────────────────
@@ -480,6 +515,72 @@ async function persistAllNotes() {
   const existing = await safeGet(allKey, []);
   const otherNotes = existing.filter((n) => n.url !== currentNoteUrl);
   await safeSet({ [allKey]: [...otherNotes, ...notes] });
+}
+
+// Pass 7: Scan all markup_notes_* keys that share the same hostname
+async function loadAllDomainNotes(pageUrl) {
+  if (!pageUrl) return [];
+  let hostname;
+  try { hostname = new URL(pageUrl).hostname; } catch { return []; }
+  if (!hostname) return [];
+  const all = await safeGet(null, {});
+  const result = [];
+  for (const [key, val] of Object.entries(all)) {
+    if (!key.startsWith("markup_notes_")) continue;
+    const storedUrl = key.slice("markup_notes_".length);
+    if (storedUrl === currentNoteUrl) continue; // current URL loaded separately
+    let storedHostname;
+    try { storedHostname = new URL(storedUrl).hostname; } catch { continue; }
+    if (storedHostname !== hostname) continue;
+    if (Array.isArray(val)) {
+      val.forEach((n) => result.push({ ...n, url: storedUrl }));
+    }
+  }
+  return result;
+}
+
+// Pass 8: Fresh domain-wide scan at brief-generation time.
+// Returns [{url, notes[]}] — current URL first, others sorted.
+async function collectDomainNotes() {
+  if (!currentNoteUrl) return notes.length > 0 ? [{ url: currentNoteUrl, notes }] : [];
+  let hostname;
+  try { hostname = new URL(currentNoteUrl).hostname; } catch { return notes.length > 0 ? [{ url: currentNoteUrl, notes }] : []; }
+
+  const all = await safeGet(null, {});
+  const groupMap = {};
+
+  for (const [key, val] of Object.entries(all)) {
+    if (!key.startsWith("markup_notes_")) continue;
+    const storedUrl = key.slice("markup_notes_".length);
+    if (!storedUrl) continue;
+    let storedHostname;
+    try { storedHostname = new URL(storedUrl).hostname; } catch { continue; }
+    if (storedHostname !== hostname) continue;
+    if (!Array.isArray(val) || val.length === 0) continue;
+    // For current URL, use in-memory notes (most up-to-date)
+    groupMap[storedUrl] = storedUrl === currentNoteUrl
+      ? notes.map((n) => ({ ...n, url: currentNoteUrl }))
+      : val.map((n) => ({ ...n, url: storedUrl }));
+  }
+  // Ensure current URL is included if it has in-memory notes not yet persisted
+  if (notes.length > 0 && !groupMap[currentNoteUrl]) {
+    groupMap[currentNoteUrl] = notes.map((n) => ({ ...n, url: currentNoteUrl }));
+  }
+
+  const urls = Object.keys(groupMap);
+  const sorted = [
+    ...urls.filter((u) => u === currentNoteUrl),
+    ...urls.filter((u) => u !== currentNoteUrl).sort(),
+  ];
+  return sorted.map((url) => ({ url, notes: groupMap[url] }));
+}
+
+function getBriefPathLabel(url) {
+  try {
+    const u = new URL(url);
+    const pq = u.pathname + u.search;
+    return (pq === "/" || pq === "") ? "Home" : pq;
+  } catch { return url; }
 }
 
 async function persistNotes() {
@@ -537,11 +638,13 @@ async function saveBrief(markdown) {
     autoName = `${pageName} · ${dateStr}`;
   } catch { /* keep default */ }
 
+  // Pass 8: use domain-wide notes for counts
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
   const severitySummary = {
-    critical: notes.filter((n) => (n.severity || "medium") === "critical").length,
-    high:     notes.filter((n) => (n.severity || "medium") === "high").length,
-    medium:   notes.filter((n) => (n.severity || "medium") === "medium").length,
-    low:      notes.filter((n) => (n.severity || "medium") === "low").length,
+    critical: allBriefNotes.filter((n) => (n.severity || "medium") === "critical").length,
+    high:     allBriefNotes.filter((n) => (n.severity || "medium") === "high").length,
+    medium:   allBriefNotes.filter((n) => (n.severity || "medium") === "medium").length,
+    low:      allBriefNotes.filter((n) => (n.severity || "medium") === "low").length,
   };
 
   const entry = {
@@ -550,7 +653,7 @@ async function saveBrief(markdown) {
     url: currentNoteUrl,
     pageTitle: sessionTitle || tabTitle || "",
     timestamp: Date.now(),
-    noteCount: notes.length,
+    noteCount: allBriefNotes.length,
     severitySummary,
     markdown,
   };
@@ -590,7 +693,7 @@ function hideBriefsArchive() {
   briefsArchivePanelEl.hidden = true;
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
-  filterTabsEl.hidden = false;
+  filterTabsEl.hidden = !devMode;
   formArea.hidden = false;
   markupActionsEl.hidden = false;
   toggleSectionEl.hidden = false;
@@ -624,15 +727,15 @@ async function renderBriefsArchiveList() {
   }
 
   // Newest first
-  [...briefs].reverse().forEach((brief) => {
+  const reversed = [...briefs].reverse();
+  reversed.forEach((brief, idx) => {
     const item = document.createElement("div");
     item.className = "brief-entry";
+    // Pass 5: gold dot for most recent
+    if (idx === 0) item.classList.add("brief-entry--latest");
 
     const dateStr = new Date(brief.timestamp).toLocaleDateString("en-US", {
       month: "short", day: "numeric", year: "numeric",
-    });
-    const timeStr = new Date(brief.timestamp).toLocaleTimeString("en-US", {
-      hour: "numeric", minute: "2-digit",
     });
 
     // Severity chips
@@ -645,6 +748,8 @@ async function renderBriefsArchiveList() {
     let domain = brief.url || "";
     try { domain = new URL(brief.url).hostname; } catch { /* */ }
 
+    const noteCount = Number(brief.noteCount) | 0;
+
     item.innerHTML = `
       <div class="brief-entry__body">
         <div class="brief-entry__name-wrap">
@@ -653,13 +758,12 @@ async function renderBriefsArchiveList() {
         </div>
         <span class="brief-entry__url">${escapeHtml(domain)}</span>
         <div class="brief-entry__meta">
-          <span class="brief-entry__date">${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</span>
-          <span class="brief-entry__count">${Number(brief.noteCount)|0} note${Number(brief.noteCount)|0 === 1 ? "" : "s"}</span>
+          <span class="brief-entry__date">${escapeHtml(dateStr)} · ${noteCount} note${noteCount === 1 ? "" : "s"}</span>
         </div>
         ${sevChips ? `<div class="brief-entry__chips">${sevChips}</div>` : ""}
       </div>
       <div class="brief-entry__actions">
-        <button class="btn-brief-open">Open</button>
+        <button class="btn-brief-open">Open →</button>
         <button class="icon-btn btn-brief-delete" aria-label="Delete">✕</button>
       </div>
     `;
@@ -701,6 +805,12 @@ async function renderBriefsArchiveList() {
 
     briefsArchiveList.appendChild(item);
   });
+
+  // Pass 5: footer text
+  const footer = document.createElement("p");
+  footer.className = "briefs-archive__footer";
+  footer.textContent = "Last 10 briefs per URL · Sorted newest first";
+  briefsArchiveList.appendChild(footer);
 }
 
 // ─── Simple markdown renderer (Brief Reader only) ──────────────
@@ -785,25 +895,22 @@ async function checkStorageQuota() {
 }
 
 // ─── Filter tab count badges ───────────────────────────────────
-function updateFilterTabCounts() {
+function updateFilterTabCounts(notesArray) {
+  const arr = notesArray || notes;
   const counts = {
-    all:      notes.length,
-    critical: notes.filter((n) => (n.severity || "medium") === "critical").length,
-    high:     notes.filter((n) => (n.severity || "medium") === "high").length,
-    medium:   notes.filter((n) => (n.severity || "medium") === "medium").length,
-    low:      notes.filter((n) => (n.severity || "medium") === "low").length,
+    all:      arr.length,
+    critical: arr.filter((n) => (n.severity || "medium") === "critical").length,
+    high:     arr.filter((n) => (n.severity || "medium") === "high").length,
+    medium:   arr.filter((n) => (n.severity || "medium") === "medium").length,
+    low:      arr.filter((n) => (n.severity || "medium") === "low").length,
   };
+  const LABELS = { all: "ALL", critical: "CRIT", high: "HIGH", medium: "MED", low: "LOW" };
   filterTabEls.forEach((tab) => {
     const f = tab.dataset.filter;
     const n = counts[f] ?? 0;
-    let span = tab.querySelector(".filter-tab__count");
-    if (!span) {
-      span = document.createElement("span");
-      span.className = "filter-tab__count";
-      tab.appendChild(span);
-    }
-    span.textContent = `(${n})`;
-    span.classList.toggle("filter-tab__count--nonzero", n > 0);
+    const label = LABELS[f] || f.toUpperCase();
+    // ALL tab always shows count; other tabs only show count when > 0
+    tab.textContent = (f === "all" || n > 0) ? `${label} (${n})` : label;
   });
 }
 
@@ -821,26 +928,76 @@ function sendNotesToContentScript() {
 
 // ─── Render ────────────────────────────────────────────────────
 function renderNotesList() {
-  notesList.querySelectorAll(".note-card").forEach((c) => c.remove());
+  notesList.querySelectorAll(".note-card, .url-group").forEach((c) => c.remove());
 
-  const count = notes.length;
-  noteCountEl.textContent = count === 1 ? "1 note" : `${count} notes`;
+  // Pass 8: enable generate button based on domain-wide total
+  const combined = [
+    ...allNotes.filter((n) => (n.url || "") !== currentNoteUrl),
+    ...notes.map((n) => ({ ...n, url: currentNoteUrl })),
+  ];
+  generateBtn.disabled = combined.length === 0;
+  generateBtn.setAttribute("aria-disabled", combined.length === 0 ? "true" : "false");
 
-  generateBtn.disabled = count === 0;
-  generateBtn.setAttribute("aria-disabled", count === 0 ? "true" : "false");
+  // Check if notes exist for more than one URL
+  const urlSet = new Set(combined.map((n) => n.url || currentNoteUrl));
+  const isMultiPage = urlSet.size > 1;
 
-  updateFilterTabCounts();
+  // Note count: always domain-wide total
+  noteCountEl.textContent = `${combined.length} notes`;
+
+  updateFilterTabCounts(combined);
   updateEmptyState();
   updateClearAllVisibility();
   sendNotesToContentScript(); // Sprint 8 F6: update in-page badges
 
-  const visible = activeFilter === "all"
-    ? notes
-    : notes.filter((n) => (n.severity || "medium") === activeFilter);
+  if (!isMultiPage) {
+    // Single URL (or all domain notes on one URL): flat list, render from combined
+    const visible = activeFilter === "all"
+      ? combined
+      : combined.filter((n) => (n.severity || "medium") === activeFilter);
 
-  visible.forEach((note) => {
-    notesList.appendChild(createNoteCard(note));
-  });
+    visible.forEach((note) => {
+      notesList.appendChild(createNoteCard(note));
+    });
+  } else {
+    // Multi-page: grouped by URL — current URL first
+    const urls = [currentNoteUrl, ...[...urlSet].filter((u) => u !== currentNoteUrl)];
+
+    urls.forEach((url) => {
+      const groupNotes = combined.filter((n) => (n.url || currentNoteUrl) === url);
+      const visibleNotes = activeFilter === "all"
+        ? groupNotes
+        : groupNotes.filter((n) => (n.severity || "medium") === activeFilter);
+
+      if (visibleNotes.length === 0) return; // skip empty groups after filter
+
+      let pathLabel = url;
+      try {
+        const u = new URL(url);
+        const pq = u.pathname + u.search;
+        pathLabel = (pq === "/" || pq === "") ? "Home" : pq;
+      } catch { /* */ }
+
+      const isCurrentPage = url === currentNoteUrl;
+
+      const group = document.createElement("div");
+      group.className = "url-group" + (isCurrentPage ? " url-group--current" : "");
+
+      const header = document.createElement("div");
+      header.className = "url-group__header" + (isCurrentPage ? " url-group__header--current" : "");
+      header.innerHTML = isCurrentPage
+        ? `<span class="url-group__url">${escapeHtml(pathLabel)}</span><span class="url-group__chip">current page</span>`
+        : `<span class="url-group__url">${escapeHtml(pathLabel)}</span>`;
+
+      group.appendChild(header);
+
+      visibleNotes.forEach((note) => {
+        group.appendChild(createNoteCard(note));
+      });
+
+      notesList.appendChild(group);
+    });
+  }
 }
 
 function createNoteCard(note) {
@@ -854,7 +1011,8 @@ function createNoteCard(note) {
   const ariaLabel = devMode
     ? `${config.label} note, ${sevConfig.label} severity: ${textPreview}`
     : `Note: ${textPreview}`;
-  card.className = "note-card";
+  // Simple Mode: no severity border — don't apply severity class
+  card.className = devMode ? `note-card note-card--${severity}` : "note-card";
   card.setAttribute("role", "article");
   card.setAttribute("aria-label", ariaLabel);
   card.dataset.noteId = note.id;
@@ -873,7 +1031,7 @@ function createNoteCard(note) {
         <div class="note-card__meta-right">
           ${tsHtml}
           <div class="note-card__actions">
-            <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
+            <button class="icon-btn edit-btn" aria-label="Edit note">✎</button>
             <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
           </div>
         </div>
@@ -897,13 +1055,13 @@ function createNoteCard(note) {
     card.innerHTML = `
       <div class="note-card__header">
         <div class="note-card__tags">
-          <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
           <span class="note-severity-badge note-severity-badge--${escapeHtml(severity)}">${sevConfig.label}</span>
+          <span class="note-type-tag note-type-tag--${escapeHtml(note.type)}">${config.label}</span>
         </div>
         <div class="note-card__meta-right">
           ${tsHtml}
           <div class="note-card__actions">
-            <button class="icon-btn edit-btn" aria-label="Edit note">Edit</button>
+            <button class="icon-btn edit-btn" aria-label="Edit note">✎</button>
             <button class="icon-btn delete-btn" aria-label="Delete note">✕</button>
           </div>
         </div>
@@ -915,7 +1073,7 @@ function createNoteCard(note) {
   }
 
   card.querySelector(".edit-btn").addEventListener("click", () => { enterEditMode(note); });
-  card.querySelector(".delete-btn").addEventListener("click", () => { deleteNote(note.id); });
+  card.querySelector(".delete-btn").addEventListener("click", () => { deleteNote(note.id, note.url); });
 
   // Sprint 8 F8: hover note card → temporarily highlight element in page
   if (note.selector) {
@@ -987,6 +1145,30 @@ async function flushSave() {
   const severity = devMode ? getActiveSeverity() : "medium";
 
   if (currentNoteId) {
+    if (editingNoteUrl && editingNoteUrl !== currentNoteUrl) {
+      // Pass 7: editing a note from another URL — save to that URL's storage key
+      const storageKey = `markup_notes_${editingNoteUrl}`;
+      const otherNotes = await safeGet(storageKey, []);
+      const idx = otherNotes.findIndex((n) => n.id === currentNoteId);
+      if (idx >= 0) {
+        pushUndo("Edit undone");
+        otherNotes[idx] = {
+          ...otherNotes[idx],
+          type, severity, text,
+          selector: currentSelector,
+          elementLabel: currentSelector ? (currentElementLabel || otherNotes[idx].elementLabel) : null,
+          elementName: currentSelector ? null : "General note",
+        };
+        await safeSet({ [storageKey]: otherNotes });
+        // Update in-memory allNotes so re-render reflects the change immediately
+        const aNoteIdx = allNotes.findIndex((n) => n.id === currentNoteId);
+        if (aNoteIdx >= 0) {
+          allNotes[aNoteIdx] = { ...allNotes[aNoteIdx], type, severity, text, selector: currentSelector };
+        }
+      }
+      renderNotesList();
+      return;
+    }
     const idx = notes.findIndex((n) => n.id === currentNoteId);
     if (idx >= 0) {
       pushUndo("Edit undone");
@@ -1030,7 +1212,7 @@ function resetForm() {
   noteInput.value     = "";
   selectorRow.hidden  = true;
   selectorDisplay.textContent = "";
-  saveBtn.textContent = "Save Note";
+  saveBtn.textContent = "SAVE NOTE";
   resetTypePicker();
   resetSeverityPicker();
   updateClearSelectorVisibility();
@@ -1044,9 +1226,8 @@ function deactivateReset() {
   editPrevSelector    = null;
   selectorRow.hidden  = true;
   selectorDisplay.textContent = "";
-  saveBtn.textContent = "Save Note";
-  resetTypePicker();
-  resetSeverityPicker();
+  saveBtn.textContent = "SAVE NOTE";
+  // Intentionally NOT resetting type/severity pickers — user's choice is preserved across deactivation.
   updateClearSelectorVisibility();
 }
 
@@ -1064,6 +1245,7 @@ function enterEditMode(note) {
   isEditing        = true;
   editPrevSelector = currentSelector;
   currentNoteId    = note.id;
+  editingNoteUrl   = note.url || currentNoteUrl; // Pass 7: track which URL this note belongs to
   currentSelector  = note.selector;
   currentElementLabel = note.elementLabel || null;
   noteInput.value  = note.text;
@@ -1076,7 +1258,8 @@ function enterEditMode(note) {
     selectorDisplay.textContent = note.selector || "Hover to preview element";
     selectorDisplay.className = `selector-chip ${hasSelector ? "selector-chip--filled" : "selector-chip--empty"}`;
   }
-  saveBtn.textContent = "Update Note";
+  saveBtn.textContent = "UPDATE NOTE";
+  if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to update · Esc to cancel";
   updateClearSelectorVisibility();
   // Dim other cards, mark active card
   const notesList = document.getElementById("notes-list");
@@ -1092,14 +1275,16 @@ function enterEditMode(note) {
 function exitEditMode() {
   isEditing        = false;
   currentNoteId    = null;
+  editingNoteUrl   = null; // Pass 7
   currentSelector  = editPrevSelector;
   currentElementLabel = null;
   editPrevSelector = null;
   noteInput.value  = "";
   resetTypePicker();
   resetSeverityPicker();
-  saveBtn.textContent = "Save Note";
+  saveBtn.textContent = "SAVE NOTE";
   selectorDisplay.textContent = currentSelector || "Hover to preview element";
+  if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to save";
   updateClearSelectorVisibility();
   // Restore card opacity
   const notesList = document.getElementById("notes-list");
@@ -1111,16 +1296,25 @@ function exitEditMode() {
 }
 
 // ─── Delete note ───────────────────────────────────────────────
-async function deleteNote(id) {
+async function deleteNote(id, noteUrl) {
   // Sprint 9 (2j): exit animation before removal
   const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
   if (card) {
     card.classList.add("note-card--exiting");
     await new Promise((r) => setTimeout(r, 200));
   }
-  pushUndo("Note restored");
-  notes = notes.filter((n) => n.id !== id);
-  await persistNotes();
+  const targetUrl = noteUrl || currentNoteUrl;
+  if (targetUrl !== currentNoteUrl) {
+    // Pass 7: delete from another URL's storage key
+    const storageKey = `markup_notes_${targetUrl}`;
+    const otherNotes = await safeGet(storageKey, []);
+    await safeSet({ [storageKey]: otherNotes.filter((n) => n.id !== id) });
+    allNotes = allNotes.filter((n) => !(n.id === id && (n.url || "") === targetUrl));
+  } else {
+    pushUndo("Note restored");
+    notes = notes.filter((n) => n.id !== id);
+    await persistNotes();
+  }
   renderNotesList();
 }
 
@@ -1179,12 +1373,14 @@ clearSelectorBtn.addEventListener("click", async () => {
 });
 
 // ─── Clear all ─────────────────────────────────────────────────
-clearAllBtn.addEventListener("click", () => {
-  const n = notes.length;
-  clearConfirmMsgEl.textContent = `Delete all ${n} note${n === 1 ? "" : "s"}?`;
-  clearConfirmEl.hidden = false;
-  clearAllBtn.hidden = true;
-});
+if (clearAllBtn) {
+  clearAllBtn.addEventListener("click", () => {
+    const n = notes.length;
+    clearConfirmMsgEl.textContent = `Delete all ${n} note${n === 1 ? "" : "s"}?`;
+    clearConfirmEl.hidden = false;
+    clearAllBtn.hidden = true;
+  });
+}
 
 clearConfirmYesBtn.addEventListener("click", async () => {
   await writeBackup();
@@ -1203,13 +1399,16 @@ clearConfirmNoBtn.addEventListener("click", () => {
 // ─── Note pending prompt ───────────────────────────────────────
 notePendingSaveBtn.addEventListener("click", async () => {
   notePendingPrompt.hidden = true;
-  const sel = pendingElementSelector;
+  const sel   = pendingElementSelector;
+  const label = pendingElementLabel;
   pendingElementSelector = null;
+  pendingElementLabel    = null;
   await flushSave();
   softReset();
   if (sel) {
-    currentSelector = sel;
-    currentNoteId   = null;
+    currentSelector     = sel;
+    currentElementLabel = label;
+    currentNoteId       = null;
     if (devMode) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = sel;
@@ -1222,14 +1421,17 @@ notePendingSaveBtn.addEventListener("click", async () => {
 
 notePendingDiscardBtn.addEventListener("click", () => {
   notePendingPrompt.hidden = true;
-  const sel = pendingElementSelector;
+  const sel   = pendingElementSelector;
+  const label = pendingElementLabel;
   pendingElementSelector = null;
+  pendingElementLabel    = null;
   noteInput.value = "";
   resetTypePicker();
   resetSeverityPicker();
   currentNoteId = null;
   if (sel) {
-    currentSelector = sel;
+    currentSelector     = sel;
+    currentElementLabel = label;
     if (devMode) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = sel;
@@ -1243,6 +1445,7 @@ notePendingDiscardBtn.addEventListener("click", () => {
 // ─── Brief panel ───────────────────────────────────────────────
 
 // Sprint 9 (F1): Simple Mode brief — plain prose, no selectors, no emoji headers, chronological
+// Pass 8: domain-wide — uses briefDomainGroups, grouped by URL if multi-page
 function buildSimpleBriefText() {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", {
@@ -1253,33 +1456,42 @@ function buildSimpleBriefText() {
   });
   const project = sessionTitle || tabTitle || "Unknown";
 
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
+  const isMultiUrl = briefDomainGroups.length > 1;
+
+  let domainName = currentNoteUrl;
+  try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
+
   const lines = [
     `# Markup — Feedback`,
     ``,
     `**Project:** ${project}`,
-    `**URL:** ${currentTabUrl || "Unknown"}`,
+    `**Domain:** ${domainName}`,
     `**Date:** ${dateStr} at ${timeStr}`,
-    `**Notes:** ${notes.length}`,
+    `**Notes:** ${allBriefNotes.length}`,
     ``,
     `---`,
     ``,
   ];
 
-  // Always chronological in Simple Mode — sort toggle is hidden
-  const sorted = [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-  sorted.forEach((note, i) => {
-    if (i > 0) lines.push(``);
-    const label = note.elementLabel || note.elementName || "General";
-    lines.push(`${label}: ${note.text}`);
-  });
-
-  lines.push(``);
-  lines.push(`---`);
+  for (const group of briefDomainGroups) {
+    const pathLabel = getBriefPathLabel(group.url);
+    lines.push(`## ${pathLabel}`);
+    lines.push(``);
+    const sorted = [...group.notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    sorted.forEach((note, i) => {
+      if (i > 0) lines.push(``);
+      lines.push(note.text);
+    });
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+  }
 
   return lines.join("\n");
 }
 
+// Pass 8: domain-wide — uses briefDomainGroups, grouped by URL if multi-page
 function buildBriefText() {
   // Sprint 9 (F1): delegate to simple brief in simple mode
   if (!devMode) return buildSimpleBriefText();
@@ -1292,11 +1504,16 @@ function buildBriefText() {
   });
 
   const project = sessionTitle || tabTitle || "Unknown";
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
+  const isMultiUrl = briefDomainGroups.length > 1;
 
-  // Severity summary counts
+  let domainName = currentNoteUrl;
+  try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
+
+  // Severity summary counts — domain-wide
   const sevCounts = {};
   for (const s of SEVERITY_ORDER) {
-    sevCounts[s] = notes.filter((n) => (n.severity || "medium") === s).length;
+    sevCounts[s] = allBriefNotes.filter((n) => (n.severity || "medium") === s).length;
   }
   const sevSummary = SEVERITY_ORDER
     .map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`)
@@ -1306,64 +1523,192 @@ function buildBriefText() {
     `# Markup — Fix Instructions`,
     ``,
     `**Project:** ${project}`,
-    `**URL:** ${currentTabUrl || "Unknown"}`,
+    `**Domain:** ${domainName}`,
     `**Reviewed:** ${dateStr} at ${timeStr}`,
     `**Mode:** Self Review`,
-    `**Total Issues:** ${notes.length}`,
+    `**Total Issues:** ${allBriefNotes.length}`,
     `**Severity:** ${sevSummary}`,
     ``,
     `---`,
   ];
 
-  // Sprint 8 F10 setting: severity-grouped (default) or chronological
-  if (briefSortMode === "chronological") {
-    lines.push(``);
-    const sorted = [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    sorted.forEach((note, i) => {
-      if (i > 0) lines.push(``);
-      const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-      const sev     = note.severity || "medium";
-      const sevCfg  = SEVERITY_CONFIG[sev];
-      const label   = note.elementLabel || note.elementName || note.selector || "No element selected";
-      lines.push(`**[${typeCfg.label} · ${sevCfg.label}]** ${label}`);
-      if (note.selector) lines.push(`**Selector:** ${note.selector}`);
-      lines.push(`**${typeCfg.field}:** ${note.text}`);
-    });
-    lines.push(``);
-    lines.push(`---`);
-  } else {
-    // Severity-grouped (default)
-    for (const sev of SEVERITY_ORDER) {
-      const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
-      if (sevNotes.length === 0) continue;
-
-      const cfg = SEVERITY_CONFIG[sev];
+  function appendNotesGroup(notesArr, headingLevel) {
+    const h = "#".repeat(headingLevel);
+    if (briefSortMode === "chronological") {
       lines.push(``);
-      lines.push(`## ${cfg.emoji} ${cfg.label} (${sevNotes.length})`);
-
-      const sorted = [...sevNotes].sort(
-        (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
-      );
-
+      const sorted = [...notesArr].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       sorted.forEach((note, i) => {
         if (i > 0) lines.push(``);
         const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-        // Sprint 8 F5: use elementLabel if available
-        const label = note.elementLabel || note.elementName || note.selector || "No element selected";
-        lines.push(`**[${typeCfg.label}]** ${label}`);
+        const sev     = note.severity || "medium";
+        const sevCfg  = SEVERITY_CONFIG[sev];
+        const label   = note.elementLabel || note.elementName || note.selector || "No element selected";
+        lines.push(`**[${typeCfg.label} · ${sevCfg.label}]** ${label}`);
         if (note.selector) lines.push(`**Selector:** ${note.selector}`);
         lines.push(`**${typeCfg.field}:** ${note.text}`);
       });
-
       lines.push(``);
       lines.push(`---`);
+    } else {
+      for (const sev of SEVERITY_ORDER) {
+        const sevNotes = notesArr.filter((n) => (n.severity || "medium") === sev);
+        if (sevNotes.length === 0) continue;
+        const cfg = SEVERITY_CONFIG[sev];
+        lines.push(``);
+        lines.push(`${h} ${cfg.emoji} ${cfg.label} (${sevNotes.length})`);
+        const sorted = [...sevNotes].sort(
+          (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+        );
+        sorted.forEach((note, i) => {
+          if (i > 0) lines.push(``);
+          const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+          const label = note.elementLabel || note.elementName || note.selector || "No element selected";
+          lines.push(`**[${typeCfg.label}]** ${label}`);
+          if (note.selector) lines.push(`**Selector:** ${note.selector}`);
+          lines.push(`**${typeCfg.field}:** ${note.text}`);
+        });
+        lines.push(``);
+        lines.push(`---`);
+      }
     }
+  }
+
+  for (const group of briefDomainGroups) {
+    const pathLabel = getBriefPathLabel(group.url);
+    lines.push(``);
+    lines.push(`## ${pathLabel}`);
+    appendNotesGroup(group.notes, 3);
   }
 
   return lines.join("\n");
 }
 
-function showBrief() {
+// ─── Brief panel HTML renderer ─────────────────────────────────
+// Renders a single note as a styled entry card (Dev Mode).
+function renderBriefEntryHtml(note) {
+  const sev = note.severity || "medium";
+  const sevCfg = SEVERITY_CONFIG[sev];
+  const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+  let html = `<div class="brief-entry-card">`;
+  html += `<div class="brief-entry-chips">`;
+  html += `<span class="brief-severity-chip brief-severity-chip--${escapeHtml(sev)}">${escapeHtml(sevCfg.label)}</span>`;
+  html += `<span class="brief-type-chip">${escapeHtml(typeCfg.label)}</span>`;
+  html += `</div>`;
+  if (note.selector) {
+    html += `<code class="brief-selector-text">${escapeHtml(note.selector)}</code>`;
+  }
+  html += `<p class="brief-note-body">${escapeHtml(note.text)}</p>`;
+  html += `</div>`;
+  return html;
+}
+
+// Builds styled HTML for the brief panel — Dev Mode.
+// Pass 8: domain-wide — uses briefDomainGroups, grouped by URL if multi-page
+function buildBriefPanelHtml() {
+  if (!devMode) return buildSimpleBriefPanelHtml();
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const project = sessionTitle || tabTitle || "Unknown";
+
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
+  const isMultiUrl = briefDomainGroups.length > 1;
+
+  let domainName = currentNoteUrl;
+  try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
+
+  const sevCounts = {};
+  for (const s of SEVERITY_ORDER) {
+    sevCounts[s] = allBriefNotes.filter((n) => (n.severity || "medium") === s).length;
+  }
+  const sevSummary = SEVERITY_ORDER.map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`).join(" · ");
+
+  let html = `<h1>Markup — Fix Instructions</h1>`;
+  html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Reviewed:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Total Issues:</strong> ${allBriefNotes.length}</p>`;
+  html += `<p class="brief-meta-line"><strong>Severity:</strong> ${escapeHtml(sevSummary)}</p>`;
+  html += `<hr>`;
+
+  function appendPanelGroup(notesArr) {
+    if (briefSortMode === "chronological") {
+      const sorted = [...notesArr].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      sorted.forEach((note) => { html += renderBriefEntryHtml(note); });
+    } else {
+      for (const sev of SEVERITY_ORDER) {
+        const sevNotes = notesArr.filter((n) => (n.severity || "medium") === sev);
+        if (sevNotes.length === 0) continue;
+        const cfg = SEVERITY_CONFIG[sev];
+        html += `<h3>${cfg.emoji} ${cfg.label} (${sevNotes.length})</h3>`;
+        const sorted = [...sevNotes].sort(
+          (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+        );
+        sorted.forEach((note) => { html += renderBriefEntryHtml(note); });
+      }
+    }
+  }
+
+  for (const group of briefDomainGroups) {
+    const pathLabel = getBriefPathLabel(group.url);
+    html += `<h2 class="brief-url-header">${escapeHtml(pathLabel)}</h2>`;
+    appendPanelGroup(group.notes);
+    html += `<hr>`;
+  }
+  return html;
+}
+
+// Builds styled HTML for the brief panel — Simple Mode.
+// Pass 8: domain-wide — uses briefDomainGroups, grouped by URL if multi-page
+function buildSimpleBriefPanelHtml() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const project = sessionTitle || tabTitle || "Unknown";
+
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
+  const isMultiUrl = briefDomainGroups.length > 1;
+
+  let domainName = currentNoteUrl;
+  try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
+
+  let html = `<h1>Markup — Feedback</h1>`;
+  html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Date:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Notes:</strong> ${allBriefNotes.length}</p>`;
+  html += `<hr>`;
+
+  function renderSimpleEntries(notesArr) {
+    notesArr.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach((note) => {
+      const tsStr = note.createdAt
+        ? new Date(note.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        : "";
+      html += `<div class="brief-simple-entry">`;
+      if (tsStr) html += `<p class="brief-simple-ts">${escapeHtml(tsStr)}</p>`;
+      html += `<p class="brief-note-body">${escapeHtml(note.text)}</p>`;
+      html += `</div>`;
+    });
+  }
+
+  for (const group of briefDomainGroups) {
+    const pathLabel = getBriefPathLabel(group.url);
+    html += `<h2 class="brief-url-header">${escapeHtml(pathLabel)}</h2>`;
+    renderSimpleEntries([...group.notes]);
+    html += `<hr>`;
+  }
+  return html;
+}
+
+async function showBrief() {
+  // Pass 8: collect domain-wide notes fresh at generation time
+  briefDomainGroups = await collectDomainNotes();
+
   notesList.hidden = true;
   sessionTitleWrap.hidden = true;
   clearConfirmEl.hidden = true;
@@ -1379,7 +1724,8 @@ function showBrief() {
 
   setTimeout(async () => {
     const briefText = buildBriefText();
-    briefContent.textContent = briefText;
+    currentBriefText = briefText;
+    briefContent.innerHTML = buildBriefPanelHtml();
     briefGenerating.hidden = true;
     briefContent.hidden = false;
     await saveBrief(briefText); // Sprint 8 F1: persist to history
@@ -1394,14 +1740,16 @@ function hideBrief() {
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
   formArea.hidden = false;
-  filterTabsEl.hidden = false;
+  filterTabsEl.hidden = !devMode;
   markupActionsEl.hidden = false;
   toggleSectionEl.hidden = false;
   checkStorageQuota(); // restore quota warning if needed
 }
 
 generateBtn.addEventListener("click", () => {
-  if (notes.length === 0) {
+  // Pass 8: check domain-wide total
+  const domainTotal = notes.length + allNotes.length;
+  if (domainTotal === 0) {
     showToast("No notes to generate a brief from.");
     return;
   }
@@ -1410,7 +1758,7 @@ generateBtn.addEventListener("click", () => {
 
 copyBriefBtn.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(briefContent.textContent);
+    await navigator.clipboard.writeText(currentBriefText);
     copyBriefBtn.textContent = "Copied!";
     setTimeout(() => { copyBriefBtn.textContent = "Copy to Clipboard"; }, 2000);
   } catch {
@@ -1423,7 +1771,7 @@ copyBriefBtn.addEventListener("click", async () => {
 //   brief.md + /images/ folder with all screenshots.
 downloadZipBtn.addEventListener("click", () => {
   console.log("Markup: ZIP not yet implemented — JSZip not available. Falling back to .md download.");
-  const text = briefContent.textContent;
+  const text = currentBriefText;
   const dateStr = new Date().toISOString().slice(0, 10);
   let domain = currentTabUrl;
   try { domain = new URL(currentTabUrl).hostname; } catch { /* use full url */ }
@@ -1437,52 +1785,86 @@ downloadZipBtn.addEventListener("click", () => {
 });
 
 // ─── Export as HTML report (Sprint 10) ────────────────────────
+// Pass 8: domain-wide — uses briefDomainGroups collected by showBrief()
 downloadHtmlBtn.addEventListener("click", () => {
   const dateStr = new Date().toISOString().slice(0, 10);
-  let domain = currentTabUrl;
-  try { domain = new URL(currentTabUrl).hostname; } catch { /* use full url */ }
+  let domain = currentNoteUrl;
+  try { domain = new URL(currentNoteUrl).hostname; } catch { /* use full url */ }
 
   const project = sessionTitle || tabTitle || domain;
   const mode = devMode ? "Developer Mode" : "Simple Mode";
+  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
+  const isMultiUrl = briefDomainGroups.length > 1;
 
-  // Severity summary chips (non-zero counts only)
-  const sevCounts = {};
-  for (const s of SEVERITY_ORDER) {
-    sevCounts[s] = notes.filter((n) => (n.severity || "medium") === s).length;
-  }
-  const summaryChips = SEVERITY_ORDER
-    .filter((s) => sevCounts[s] > 0)
-    .map((s) => {
-      const cfg = SEVERITY_CONFIG[s];
-      return `<span class="severity-chip chip-${s}">${sevCounts[s]} ${cfg.label}</span>`;
-    })
-    .join("\n    ");
-
-  // Notes grouped by severity
-  const sections = SEVERITY_ORDER
-    .map((sev) => {
-      const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
-      if (sevNotes.length === 0) return "";
-      const cfg = SEVERITY_CONFIG[sev];
-      const sorted = [...sevNotes].sort(
-        (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
-      );
-      const noteItems = sorted.map((note) => {
-        const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-        const selectorLine = (devMode && note.selector)
-          ? `<div class="note-selector">${escapeHtml(note.selector)}</div>` : "";
-        const typeChip = devMode
-          ? `<span class="type-chip">${escapeHtml(typeCfg.label)}</span>` : "";
-        return `      <div class="note-entry ${sev}">
+  function buildNoteEntryHtml(note, sev) {
+    const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+    const selectorLine = note.selector
+      ? `<div class="note-selector">${escapeHtml(note.selector)}</div>` : "";
+    const typeChip = `<span class="type-chip">${escapeHtml(typeCfg.label)}</span>`;
+    return `      <div class="note-entry ${escapeHtml(sev)}">
         ${selectorLine}${typeChip}
         <div class="note-body">${escapeHtml(note.text)}</div>
       </div>`;
-      }).join("\n");
-      return `    <div class="section-header">${cfg.emoji} ${cfg.label} (${sevNotes.length})</div>
-${noteItems}`;
-    })
-    .filter(Boolean)
-    .join("\n");
+  }
+
+  function buildDevSectionsForGroup(notesArr) {
+    return SEVERITY_ORDER.map((sev) => {
+      const sevNotes = notesArr.filter((n) => (n.severity || "medium") === sev);
+      if (sevNotes.length === 0) return "";
+      const cfg = SEVERITY_CONFIG[sev];
+      const sorted = [...sevNotes].sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type));
+      const noteItems = sorted.map((note) => buildNoteEntryHtml(note, sev)).join("\n");
+      return `    <div class="section-header">${cfg.emoji} ${cfg.label} (${sevNotes.length})</div>\n${noteItems}`;
+    }).filter(Boolean).join("\n");
+  }
+
+  function buildSimpleSectionsForGroup(notesArr) {
+    const sorted = [...notesArr].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    return sorted.map((note) => {
+      const tsStr = note.createdAt
+        ? new Date(note.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        : "";
+      return `    <div class="note-entry-simple">
+      ${tsStr ? `<div class="simple-ts">${escapeHtml(tsStr)}</div>` : ""}
+      <div class="note-body">${escapeHtml(note.text)}</div>
+    </div>`;
+    }).join("\n");
+  }
+
+  let reportTitle = "";
+  let summaryChipsHtml = "";
+  let noteCountMetaHtml = "";
+  let sectionsHtml = "";
+
+  if (devMode) {
+    reportTitle = "Markup Report";
+
+    const sevCounts = {};
+    for (const s of SEVERITY_ORDER) {
+      sevCounts[s] = allBriefNotes.filter((n) => (n.severity || "medium") === s).length;
+    }
+    summaryChipsHtml = `<div class="severity-summary">\n    ${SEVERITY_ORDER
+      .filter((s) => sevCounts[s] > 0)
+      .map((s) => {
+        const cfg = SEVERITY_CONFIG[s];
+        return `<span class="severity-chip chip-${s}">${sevCounts[s]} ${cfg.label}</span>`;
+      })
+      .join("\n    ")}\n  </div>`;
+
+    sectionsHtml = briefDomainGroups.map((group) => {
+      const pathLabel = getBriefPathLabel(group.url);
+      return `  <div class="url-section-header">${escapeHtml(pathLabel)}</div>\n${buildDevSectionsForGroup(group.notes)}`;
+    }).join("\n");
+  } else {
+    // Simple Mode — chronological, no severity grouping
+    reportTitle = "Markup — Feedback";
+    noteCountMetaHtml = `<p class="report-meta">${allBriefNotes.length} note${allBriefNotes.length === 1 ? "" : "s"}</p>`;
+
+    sectionsHtml = briefDomainGroups.map((group) => {
+      const pathLabel = getBriefPathLabel(group.url);
+      return `  <div class="url-section-header">${escapeHtml(pathLabel)}</div>\n${buildSimpleSectionsForGroup(group.notes)}`;
+    }).join("\n");
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1574,10 +1956,33 @@ ${noteItems}`;
       margin-bottom: 6px;
     }
     .note-body {
-      font-family: Georgia, serif;
+      font-family: Lora, Georgia, serif;
       font-size: 15px;
       line-height: 1.6;
       color: #0D0D0D;
+    }
+    .note-entry-simple {
+      background: #FAF8F3;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .simple-ts {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #6B7A99;
+      margin-bottom: 6px;
+    }
+    .url-section-header {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1A2744;
+      border-top: 2px solid rgba(201,168,76,0.4);
+      padding-top: 20px;
+      margin: 32px 0 16px 0;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.04em;
     }
     .report-footer {
       margin-top: 48px;
@@ -1592,14 +1997,13 @@ ${noteItems}`;
 </head>
 <body>
   <div class="report-header">
-    <h1 class="report-title">Markup Report</h1>
-    <p class="report-meta">${escapeHtml(currentTabUrl || "Unknown URL")} &middot; ${dateStr} &middot; ${escapeHtml(mode)}</p>
+    <h1 class="report-title">${escapeHtml(reportTitle)}</h1>
+    <p class="report-meta">${escapeHtml(domain)} &middot; ${dateStr} &middot; ${escapeHtml(mode)}</p>
     <p class="report-meta">${escapeHtml(project)}</p>
+    ${noteCountMetaHtml}
   </div>
-  <div class="severity-summary">
-    ${summaryChips}
-  </div>
-  ${sections}
+  ${summaryChipsHtml}
+  ${sectionsHtml}
   <div class="report-footer">Generated by Markup &middot; getmarkup.dev</div>
 </body>
 </html>`;
@@ -1633,7 +2037,7 @@ function hideSettings() {
   settingsPanel.hidden = true;
   notesList.hidden = false;
   sessionTitleWrap.hidden = false;
-  filterTabsEl.hidden = false;
+  filterTabsEl.hidden = !devMode;
   formArea.hidden = false;
   markupActionsEl.hidden = false;
   toggleSectionEl.hidden = false;
@@ -1678,11 +2082,11 @@ if (devModeToggle) {
   });
 }
 
-// Mode chip click — toggle between DEV / SIMPLE
+// Mode chip click — open settings and focus the mode toggle
 if (devBadgeEl) {
-  devBadgeEl.addEventListener("click", async () => {
-    await setDevMode(!devMode);
-    showToast(devMode ? "Developer Mode on" : "Simple Mode on");
+  devBadgeEl.addEventListener("click", () => {
+    showSettings();
+    setTimeout(() => { if (devModeToggle) devModeToggle.focus(); }, 100);
   });
 }
 
@@ -1803,31 +2207,26 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "ELEMENT_SELECTED") {
-    if (noteInput.value.trim() && !currentNoteId) {
+    if (noteInput.value.trim() && !currentNoteId && !isEditing) {
       pendingElementSelector = message.selector;
+      pendingElementLabel    = message.elementLabel || null;
       notePendingPrompt.hidden = false;
       return;
     }
-    flushSave().then(() => {
-      if (isEditing) {
-        isEditing        = false;
-        editPrevSelector = null;
-        saveBtn.textContent = "Save Note";
-      }
-      currentSelector     = message.selector;
-      currentElementLabel = message.elementLabel || null; // Sprint 8 F5
-      currentNoteId       = null;
-      // Sprint 9 (F1 + 2i): only show selector chip in dev mode; add filled class
-      if (devMode) {
-        selectorRow.hidden  = false;
-        selectorDisplay.textContent = message.selector;
-        selectorDisplay.className = "selector-chip selector-chip--filled";
-      }
-      noteInput.value = "";
-      resetTypePicker();
-      updateClearSelectorVisibility();
-      noteInput.focus();
-    });
+    // Update selector only — no auto-save, preserve unsaved text and edit state
+    currentSelector     = message.selector;
+    currentElementLabel = message.elementLabel || null;
+    // Sprint 9 (F1 + 2i): only show selector chip in dev mode; add filled class
+    if (devMode) {
+      selectorRow.hidden  = false;
+      selectorDisplay.textContent = message.selector;
+      selectorDisplay.className = "selector-chip selector-chip--filled";
+    }
+    // Do NOT clear noteInput — preserve any unsaved text
+    // Do NOT reset isEditing or currentNoteId — preserve edit mode state
+    updateClearSelectorVisibility();
+    // Defer focus — chrome.runtime.onMessage handlers don't let .focus() land synchronously
+    setTimeout(() => noteInput.focus(), 50);
   }
 
   if (message.type === "ELEMENT_DESELECTED") {
@@ -1835,23 +2234,12 @@ chrome.runtime.onMessage.addListener((message) => {
       ignoreNextDeselect = false;
       return;
     }
-    flushSave().then(() => {
-      if (isEditing) {
-        isEditing        = false;
-        editPrevSelector = null;
-        saveBtn.textContent = "Save Note";
-      }
-      currentSelector     = null;
-      currentElementLabel = null;
-      currentNoteId       = null;
-      if (markupActive) {
-        noteInput.value = "";
-      }
-      selectorDisplay.textContent = "Hover to preview element";
-      selectorDisplay.className = "selector-chip selector-chip--empty"; // Sprint 9 (2i)
-      resetTypePicker();
-      updateClearSelectorVisibility();
-    });
+    // Clear selector only — no auto-save, preserve noteInput, type/severity pickers, and edit state.
+    currentSelector     = null;
+    currentElementLabel = null;
+    selectorDisplay.textContent = "Hover to preview element";
+    selectorDisplay.className = "selector-chip selector-chip--empty";
+    updateClearSelectorVisibility();
   }
 
   if (message.type === "ELEMENT_HOVERED") {
@@ -1869,6 +2257,16 @@ chrome.runtime.onMessage.addListener((message) => {
       selectorDisplay.className = "selector-chip selector-chip--empty";
     }
   }
+
+  // Sprint 10: Floating note input — submitted from in-page overlay
+  if (message.type === "FLOATING_NOTE_SUBMIT") {
+    (async () => {
+      noteInput.value = message.text || "";
+      await flushSave();
+      softReset();
+    })();
+  }
+  // FLOATING_NOTE_CANCEL: no-op — sidebar state is untouched
 
   // Sprint 9 (F4): iframe detection notice
   if (message.type === "IFRAME_DETECTED") {
@@ -1901,6 +2299,7 @@ async function loadTabState(tab) {
 
   if (currentNoteUrl) {
     notes = await loadNotes();
+    allNotes = await loadAllDomainNotes(currentTabUrl); // Pass 7: scan same-hostname keys
     const stored = await loadSessionTitle();
     sessionTitle = stored !== null ? stored : tabTitle;
     sessionTitleInput.value = sessionTitle;
@@ -1957,6 +2356,9 @@ async function init() {
   // Sprint 9 (F1): Load dev mode before rendering anything
   await loadDevMode();
 
+  // Sprint 10: Show onboarding card for new Simple Mode installs
+  await showOnboardingCardIfNeeded();
+
   // Load brief sort setting — sync pill toggle
   try {
     const stored = await safeGet("markup_brief_sort", "severity");
@@ -1994,6 +2396,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   if (currentWindowId && activeInfo.windowId !== currentWindowId) return;
 
   pendingElementSelector = null;
+  pendingElementLabel    = null;
   notePendingPrompt.hidden = true;
   ignoreNextDeselect = false;
 

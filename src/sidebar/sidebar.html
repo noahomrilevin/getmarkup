@@ -4,23 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markup</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,700;1,400;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="sidebar.css" />
+<link rel="stylesheet" href="sidebar.css" />
 </head>
 <body>
   <div class="markup-sidebar">
 
-    <!-- 1 · Header: title, note count, settings, close -->
+    <!-- 1 · Header: title, note count, settings -->
     <header class="markup-header">
-      <span class="markup-title">Markup</span>
-      <span class="markup-note-count" id="note-count">0 notes</span>
-      <span class="dev-badge" id="dev-badge" hidden aria-label="Developer Mode active">DEV</span>
-      <button class="btn-clear-all" id="clear-all" hidden aria-label="Clear all notes">Clear all</button>
-      <button class="icon-btn" id="briefs-archive-btn" aria-label="Open briefs archive">📄</button>
-      <button class="icon-btn" id="settings-btn" aria-label="Open settings">⚙</button>
-      <button class="icon-btn" id="close-btn" aria-label="Close sidebar">✕</button>
+      <div class="header-title-group">
+        <span class="markup-title">Markup</span>
+        <span class="markup-note-count" id="note-count">0 notes</span>
+        <span class="dev-badge" id="dev-badge" hidden aria-label="Developer Mode active">DEV</span>
+      </div>
+      <div class="header-icon-group">
+        <button class="icon-btn" id="briefs-archive-btn" aria-label="Open briefs archive">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="settings-btn" aria-label="Open settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- 2 · Session title -->
@@ -46,11 +55,20 @@
 
     <!-- Filter tabs -->
     <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="Filter notes by severity">
-      <button class="filter-tab filter-tab--active" data-filter="all" role="tab" aria-selected="true">All</button>
-      <button class="filter-tab" data-filter="critical" role="tab" aria-selected="false">Critical</button>
-      <button class="filter-tab" data-filter="high" role="tab" aria-selected="false">High</button>
-      <button class="filter-tab" data-filter="medium" role="tab" aria-selected="false">Medium</button>
-      <button class="filter-tab" data-filter="low" role="tab" aria-selected="false">Low</button>
+      <button class="filter-tab filter-tab--active" data-filter="all" role="tab" aria-selected="true">ALL</button>
+      <button class="filter-tab" data-filter="critical" role="tab" aria-selected="false">CRIT</button>
+      <button class="filter-tab" data-filter="high" role="tab" aria-selected="false">HIGH</button>
+      <button class="filter-tab" data-filter="medium" role="tab" aria-selected="false">MED</button>
+      <button class="filter-tab" data-filter="low" role="tab" aria-selected="false">LOW</button>
+    </div>
+
+    <!-- Note pending prompt — shown when unsaved text exists and a new element is selected -->
+    <div class="note-pending-prompt" id="note-pending-prompt" hidden>
+      <span class="note-pending-prompt__msg">Save note before switching?</span>
+      <div class="note-pending-prompt__actions">
+        <button class="note-pending-prompt__save" id="note-pending-save">SAVE</button>
+        <button class="note-pending-prompt__discard" id="note-pending-discard">DISCARD</button>
+      </div>
     </div>
 
     <!-- 3 · Notes list (or empty state) -->
@@ -76,7 +94,7 @@
         </div>
         <p class="brief-generating__text">Building brief…</p>
       </div>
-      <pre class="brief-panel__content" id="brief-content"></pre>
+      <div class="brief-panel__content" id="brief-content"></div>
       <!-- Export options -->
       <div class="brief-export-bar" id="brief-panel-footer">
         <button id="copyBriefBtn" class="btn-export btn-copy">
@@ -84,20 +102,13 @@
         </button>
         <div class="brief-export-downloads">
           <button id="downloadZipBtn" class="btn-export btn-zip">
-            DOWNLOAD .MD + IMAGES
+            EXPORT MD + IMAGES
           </button>
           <button id="downloadHtmlBtn" class="btn-export btn-html">
-            EXPORT AS REPORT
+            EXPORT AS HTML
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- Note pending prompt -->
-    <div class="note-pending-prompt" id="note-pending-prompt" hidden>
-      <span class="note-pending-prompt__msg">Save note before switching?</span>
-      <button class="note-pending-prompt__save" id="note-pending-save">Save</button>
-      <button class="note-pending-prompt__discard" id="note-pending-discard">Discard</button>
     </div>
 
     <!-- 4–6 · Note form -->
@@ -139,56 +150,69 @@
       </form>
 
       <div class="save-row">
-        <button class="btn-save" type="button" id="save-note">Save Note</button>
+        <button class="btn-save" type="button" id="save-note">SAVE NOTE</button>
         <span class="save-hint">Cmd+Enter to save</span>
       </div>
     </div>
 
-    <!-- 8 · Generate Brief -->
+    <!-- 8–11 · Generate Brief + Toggle (side-by-side) -->
     <div class="markup-actions" id="markup-actions">
       <div class="brief-sort-toggle" id="brief-sort-toggle">
         <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">BY SEVERITY</button>
+        <span class="sort-sep">·</span>
         <button class="brief-sort-btn" data-sort="chronological">BY ORDER</button>
       </div>
-      <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
-        Generate Brief ↗
-      </button>
-    </div>
-
-    <!-- 9–11 · Divider + toggle + activation hint -->
-    <div class="markup-toggle-section" id="markup-toggle-section">
-      <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="Select Element — activate element selection">Select Element</button>
-      <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
+      <div class="markup-toggle-section" id="markup-toggle-section">
+        <div class="bottom-btn-row">
+          <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="SELECT ELEMENT — activate element selection">SELECT ELEMENT</button>
+          <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
+            GENERATE BRIEF →
+          </button>
+        </div>
+        <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
+        <p class="esc-select-hint" id="esc-select-hint" hidden>Esc also cancels</p>
+      </div>
     </div>
 
     <!-- Sprint 8 F10: Settings panel (replaces main view when open) -->
     <div class="settings-panel" id="settings-panel" hidden>
       <div class="settings-panel__toolbar">
         <button class="brief-back-link" id="close-settings">← Back</button>
-        <span class="settings-panel__title">Settings</span>
+        <span class="settings-panel__title">SETTINGS</span>
       </div>
       <div class="settings-panel__body">
 
-        <!-- Export Notes -->
-        <section class="settings-section">
-          <h3 class="settings-section__title">Export Notes</h3>
-          <div class="settings-section__actions">
-            <button class="btn-settings-action" id="export-json">Download JSON</button>
-            <button class="btn-settings-action" id="export-csv">Download CSV</button>
-          </div>
-        </section>
-
-        <!-- Developer Mode (Sprint 9 Feature 1) -->
+        <!-- Developer Mode -->
         <section class="settings-section">
           <div class="settings-toggle-row">
             <div class="settings-toggle-info">
               <span class="settings-toggle-label">Developer Mode</span>
-              <span class="settings-toggle-desc">Show element selectors, type and severity pickers. For developers and QA engineers.</span>
+              <span class="settings-toggle-desc">Show element selectors, type and severity pickers.</span>
             </div>
             <label class="toggle-switch" aria-label="Developer Mode toggle">
               <input type="checkbox" id="dev-mode-toggle" aria-label="Developer Mode">
               <span class="toggle-switch__track"></span>
             </label>
+          </div>
+        </section>
+
+        <!-- Brief Sort -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Brief Sort</h3>
+          <div class="settings-sort-row">
+            <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">SEVERITY</button>
+            <span class="sort-sep">·</span>
+            <button class="brief-sort-btn" data-sort="chronological">ORDER</button>
+          </div>
+          <span class="settings-toggle-desc">Severity-grouped (default) or chronological.</span>
+        </section>
+
+        <!-- Export Notes -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Export Notes</h3>
+          <div class="settings-section__actions">
+            <button class="btn-settings-action" id="export-json">EXPORT JSON</button>
+            <button class="btn-settings-action" id="export-csv">EXPORT CSV</button>
           </div>
         </section>
 
@@ -201,7 +225,7 @@
               <div class="storage-usage__fill" id="storage-usage-fill" style="width:0%"></div>
             </div>
           </div>
-          <button class="btn-settings-danger" id="settings-clear-all">Clear all notes for this page</button>
+          <button class="btn-settings-danger" id="settings-clear-all">CLEAR ALL NOTES</button>
         </section>
 
         <!-- Version -->
@@ -228,7 +252,7 @@
         <button class="brief-back-link" id="close-brief-reader">← Archive</button>
         <span class="brief-reader__name" id="brief-reader-name"></span>
       </div>
-      <pre class="brief-panel__content" id="brief-reader-content"></pre>
+      <div class="brief-panel__content" id="brief-reader-content"></div>
       <div class="brief-panel__footer">
         <button class="btn-copy-brief" id="copy-brief-reader">Copy to Clipboard</button>
         <button class="btn-copy-brief" id="download-brief-reader">Download .md</button>

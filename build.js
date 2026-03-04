@@ -15,6 +15,7 @@ async function run() {
   rmSync(DIST, { recursive: true, force: true });
   mkdirSync(join(DIST, "content"), { recursive: true });
   mkdirSync(join(DIST, "sidebar"), { recursive: true });
+  mkdirSync(join(DIST, "fonts"), { recursive: true });
 
   // Bundle content.js + css-selector-generator → single IIFE
   await build({
@@ -31,6 +32,7 @@ async function run() {
     cpSync(join(SRC, file), join(DIST, file));
   }
   cpSync(join(SRC, "sidebar"), join(DIST, "sidebar"), { recursive: true });
+  cpSync(join(SRC, "fonts"), join(DIST, "fonts"), { recursive: true });
 
   console.log("Markup: build complete → dist/");
 }

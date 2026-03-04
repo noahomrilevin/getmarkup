@@ -4,12 +4,13 @@ import { getCssSelector } from "css-selector-generator";
 console.log("Markup content script ready");
 
 // ─── Constants ────────────────────────────────────────────────────
-const RING_ID         = "__markup-ring";
-const RING_LABEL_ID   = "__markup-ring-label";
-const ESC_HINT_ID     = "__markup-esc-hint";
-const CURSOR_STYLE_ID = "__markup-cursor";
-const BADGE_CLASS     = "__markup-badge";
-const HIGHLIGHT_COLOR = "#FF8400";
+const RING_ID             = "__markup-ring";
+const RING_LABEL_ID       = "__markup-ring-label";
+const ESC_HINT_ID         = "__markup-esc-hint";
+const CURSOR_STYLE_ID     = "__markup-cursor";
+const BADGE_CLASS         = "__markup-badge";
+const HIGHLIGHT_COLOR     = "#FF8400";
+const FLOATING_INPUT_ID   = "__markup-floating-input";
 
 // ─── Sprint 9: iframe detection (Feature 4b) ─────────────────────────
 // If running inside an iframe, do not inject ring or intercept clicks.
@@ -147,24 +148,24 @@ function setRingMode(mode) {
 function showEscHint(text) {
   let hint = document.getElementById(ESC_HINT_ID);
   if (hint) {
-    hint.textContent = text || "Press Esc to deselect";
+    hint.textContent = text || "ESC · EXIT SELECTOR";
     return;
   }
   hint = document.createElement("div");
   hint.id = ESC_HINT_ID;
-  hint.textContent = text || "Press Esc to deselect";
+  hint.textContent = text || "ESC · EXIT SELECTOR";
   Object.assign(hint.style, {
     position: "fixed",
-    top: "56px",
+    top: "16px",
     left: "50%",
     transform: "translateX(-50%)",
-    background: "rgba(26, 39, 68, 0.565)",
-    color: "#FAF8F3",
-    fontSize: "11px",
-    fontFamily: "monospace",
+    background: "#1A2744",
+    color: "#C9A84C",
+    fontSize: "12px",
+    fontFamily: "'DM Mono', monospace",
     letterSpacing: "0.08em",
-    padding: "5px 16px",
-    borderRadius: "20px",
+    padding: "6px 14px",
+    borderRadius: "999px",
     zIndex: "2147483645",
     pointerEvents: "none",
     whiteSpace: "nowrap",
@@ -174,6 +175,118 @@ function showEscHint(text) {
 
 function hideEscHint() {
   document.getElementById(ESC_HINT_ID)?.remove();
+}
+
+// ─── Floating note input ──────────────────────────────────────
+function showFloatingInput(el) {
+  hideFloatingInput(); // never more than one
+  const rect = el.getBoundingClientRect();
+  const OVERLAY_W = 248;
+  const OVERLAY_H = 104; // approximate height for positioning
+
+  let top  = rect.bottom + 8;
+  let left = rect.left;
+
+  // Flip above element if it would overflow viewport bottom
+  if (top + OVERLAY_H > window.innerHeight - 8) {
+    top = rect.top - OVERLAY_H - 8;
+  }
+  // Clamp horizontal so it stays within viewport
+  if (left + OVERLAY_W > window.innerWidth - 8) left = window.innerWidth - OVERLAY_W - 8;
+  if (left < 8) left = 8;
+  top = Math.max(8, top);
+
+  const overlay = document.createElement("div");
+  overlay.id = FLOATING_INPUT_ID;
+  Object.assign(overlay.style, {
+    position:     "fixed",
+    top:          top + "px",
+    left:         left + "px",
+    width:        OVERLAY_W + "px",
+    background:   "#1A2744",
+    border:       "1px solid #C9A84C",
+    borderRadius: "8px",
+    padding:      "10px",
+    zIndex:       "999999",
+    boxShadow:    "0 4px 16px rgba(0,0,0,0.35)",
+    display:      "flex",
+    flexDirection:"column",
+    gap:          "8px",
+    boxSizing:    "border-box",
+  });
+
+  const textarea = document.createElement("textarea");
+  Object.assign(textarea.style, {
+    width:       "100%",
+    background:  "transparent",
+    color:       "#FAF8F3",
+    border:      "none",
+    outline:     "none",
+    resize:      "none",
+    fontFamily:  "system-ui, -apple-system, sans-serif",
+    fontSize:    "13px",
+    lineHeight:  "1.45",
+    minHeight:   "52px",
+    boxSizing:   "border-box",
+    padding:     "0",
+  });
+  textarea.placeholder = "Type a note…";
+  textarea.rows = 2;
+
+  const btn = document.createElement("button");
+  btn.textContent = "SAVE";
+  Object.assign(btn.style, {
+    alignSelf:     "flex-end",
+    background:    "#C9A84C",
+    color:         "#1A2744",
+    border:        "none",
+    borderRadius:  "4px",
+    padding:       "4px 12px",
+    fontSize:      "11px",
+    fontFamily:    "system-ui, -apple-system, sans-serif",
+    fontWeight:    "700",
+    letterSpacing: "0.06em",
+    cursor:        "pointer",
+  });
+
+  function submit() {
+    const text = textarea.value.trim();
+    hideFloatingInput();
+    if (text) {
+      sendToSidebar({ type: "FLOATING_NOTE_SUBMIT", text });
+    } else {
+      sendToSidebar({ type: "FLOATING_NOTE_CANCEL" });
+    }
+  }
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    submit();
+  });
+
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      submit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      hideFloatingInput();
+      sendToSidebar({ type: "FLOATING_NOTE_CANCEL" });
+    }
+  });
+
+  overlay.appendChild(textarea);
+  overlay.appendChild(btn);
+  document.documentElement.appendChild(overlay);
+  textarea.focus();
+}
+
+function hideFloatingInput() {
+  document.getElementById(FLOATING_INPUT_ID)?.remove();
 }
 
 function positionRing(el) {
@@ -326,8 +439,14 @@ function sendToSidebar(message) {
 function clearSelection() {
   selectedEl = null;
   currentLockedSelector = null; // Sprint 9: reset SPA tracking
+  hideFloatingInput();
   hideRing();
-  hideEscHint();
+  if (isActive) {
+    // Restore hover-mode pill instead of hiding
+    showEscHint("ESC · EXIT SELECTOR");
+  } else {
+    hideEscHint();
+  }
   sendToSidebar({ type: "ELEMENT_DESELECTED" });
 }
 
@@ -345,7 +464,7 @@ function onMouseover(e) {
   }
   setRingMode("hover");
   positionRing(target);
-  showEscHint("Press Esc to cancel");
+  showEscHint("ESC · EXIT SELECTOR");
   const selector = getSelector(target);
   if (selector) {
     sendToSidebar({ type: "ELEMENT_HOVERED", selector });
@@ -355,7 +474,7 @@ function onMouseover(e) {
 function onMouseout() {
   if (!isActive || selectedEl) return;
   hideRing();
-  hideEscHint();
+  showEscHint("ESC · EXIT SELECTOR");
   sendToSidebar({ type: "ELEMENT_HOVER_END" });
 }
 
@@ -365,6 +484,9 @@ function onClick(e) {
   if (target === ring || target.id === RING_ID) return;
   // Badges handle their own click — don't intercept
   if (target.classList.contains(BADGE_CLASS)) return;
+  // Floating input handles its own events — don't intercept
+  const floatingEl = document.getElementById(FLOATING_INPUT_ID);
+  if (floatingEl && floatingEl.contains(target)) return;
 
   e.preventDefault();
   e.stopPropagation();
@@ -383,7 +505,7 @@ function onClick(e) {
   currentLockedSelector = selector; // Sprint 9: track for SPA resilience
   setRingMode("selected");
   positionRing(target);
-  showEscHint("Press Esc to deselect");
+  showEscHint("ESC · DESELECT");
   console.log(
     "Markup: selected →",
     target.tagName +
@@ -397,6 +519,7 @@ function onClick(e) {
   // Sprint 8 F5: include human-readable label with selection message
   const elementLabel = getElementLabel(target);
   sendToSidebar({ type: "ELEMENT_SELECTED", selector, elementLabel });
+  showFloatingInput(target);
 }
 
 function onScroll() {
@@ -405,7 +528,16 @@ function onScroll() {
 }
 
 function onKeydown(e) {
-  if (e.key === "Escape") clearSelection();
+  if (e.key !== "Escape") return;
+  if (selectedEl) {
+    // Locked state — just deselect, return to hover mode
+    clearSelection();
+  } else {
+    // Hover mode — exit immediately; pill is cosmetic only
+    deactivate();
+    showEscHint("SELECTOR OFF");
+    setTimeout(() => hideEscHint(), 1500);
+  }
 }
 
 // ─── Activate / Deactivate ────────────────────────────────────────
@@ -425,6 +557,7 @@ function activate() {
   document.addEventListener("keydown", onKeydown);
   // Re-render badges if we have notes waiting
   if (currentAnnotatedNotes.length > 0) renderBadges();
+  showEscHint("ESC · EXIT SELECTOR");
   sendToSidebar({ type: "MARKUP_ACTIVATED" });
 }
 
@@ -432,7 +565,7 @@ function deactivate() {
   if (!isActive) return;
   isActive = false;
   window["__mkp_" + chrome.runtime.id + "_active"] = false;
-  clearSelection();
+  clearSelection(); // also calls hideFloatingInput
   hideRing();
   hideEscHint();
   removeCursorOverride();
