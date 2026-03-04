@@ -1984,6 +1984,15 @@ downloadHtmlBtn.addEventListener("click", () => {
       font-family: 'DM Mono', monospace;
       letter-spacing: 0.04em;
     }
+    .report-logotype {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+      font-size: 20px;
+      font-weight: 400;
+      color: #C9A84C;
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
     .report-footer {
       margin-top: 48px;
       padding-top: 16px;
@@ -1997,6 +2006,7 @@ downloadHtmlBtn.addEventListener("click", () => {
 </head>
 <body>
   <div class="report-header">
+    <div class="report-logotype">Markup</div>
     <h1 class="report-title">${escapeHtml(reportTitle)}</h1>
     <p class="report-meta">${escapeHtml(domain)} &middot; ${dateStr} &middot; ${escapeHtml(mode)}</p>
     <p class="report-meta">${escapeHtml(project)}</p>
