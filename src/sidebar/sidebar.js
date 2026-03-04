@@ -133,6 +133,7 @@ const storageUsageText   = document.getElementById("storage-usage-text");
 const storageUsageFill   = document.getElementById("storage-usage-fill");
 const settingsClearAllBtn = document.getElementById("settings-clear-all");
 const settingsVersionEl  = document.getElementById("settings-version");
+const settingsFooterStorageEl = document.getElementById("settings-footer-storage");
 const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
 const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
@@ -1873,6 +1874,7 @@ downloadHtmlBtn.addEventListener("click", () => {
   <meta name="viewport" content="width=device-width">
   <title>Markup Report \u2014 ${escapeHtml(domain)}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap');
     body {
       font-family: 'DM Sans', -apple-system, sans-serif;
       background: #F5F0E8;
@@ -2067,8 +2069,10 @@ async function loadSettingsPanel() {
       chrome.storage.local.getBytesInUse(null, resolve)
     );
     const kb = Math.round(bytesUsed / 1024);
+    const kbDecimal = (bytesUsed / 1024).toFixed(1);
     const pct = Math.min(100, (bytesUsed / (5 * 1024 * 1024)) * 100);
     if (storageUsageText) storageUsageText.textContent = `${kb} KB used of 5120 KB`;
+    if (settingsFooterStorageEl) settingsFooterStorageEl.textContent = `Storage: ${kbDecimal} KB used`;
     if (storageUsageFill) {
       storageUsageFill.style.width = pct + "%";
       storageUsageFill.className = "storage-usage__fill" +
