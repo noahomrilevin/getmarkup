@@ -128,6 +128,7 @@ const settingsVersionEl  = document.getElementById("settings-version");
 const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
 const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
+const briefSortToggleEl  = document.getElementById("brief-sort-toggle");
 // Sprint 9 new DOM refs
 const devBadgeEl         = document.getElementById("dev-badge");
 const devModeToggle      = document.getElementById("dev-mode-toggle");
@@ -180,6 +181,8 @@ function applyDevMode(enabled) {
   devMode = enabled;
   // DEV badge
   if (devBadgeEl) devBadgeEl.hidden = !enabled;
+  // Show/hide sort toggle (only meaningful in Developer Mode)
+  if (briefSortToggleEl) briefSortToggleEl.hidden = !enabled;
   // Show/hide type and severity pickers
   if (noteTypesRow) noteTypesRow.classList.toggle("dev-mode-hidden", !enabled);
   if (noteSeveritiesRow) noteSeveritiesRow.classList.toggle("dev-mode-hidden", !enabled);
@@ -218,9 +221,10 @@ async function setDevMode(enabled) {
 function setToggleState(active) {
   markupActive = active;
   if (active) {
-    toggleBtn.textContent = "Elements ON";
+    toggleBtn.textContent = "Stop Selecting";
     toggleBtn.classList.add("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "true");
+    toggleBtn.setAttribute("aria-label", "Stop Selecting — deactivate element selection");
     // In dev mode, show selector row; in simple mode, keep it hidden
     if (devMode) {
       selectorRow.hidden = false;
@@ -230,9 +234,10 @@ function setToggleState(active) {
       }
     }
   } else {
-    toggleBtn.textContent = "Elements OFF";
+    toggleBtn.textContent = "Select Element";
     toggleBtn.classList.remove("toggle-btn--on");
     toggleBtn.setAttribute("aria-pressed", "false");
+    toggleBtn.setAttribute("aria-label", "Select Element — activate element selection");
     deactivateReset();
   }
   updateEmptyState();
@@ -337,7 +342,7 @@ function updateEmptyState() {
     heading.textContent = "Ready to annotate?";
     const body = document.createElement("p");
     body.className = "empty-state__body";
-    body.textContent = "Turn Elements on to start selecting, or type a general note below.";
+    body.textContent = "Click Select Element to start selecting, or type a general note below.";
     emptyState.append(heading, body);
   } else {
     // No notes, Elements ON
@@ -1198,7 +1203,7 @@ notePendingDiscardBtn.addEventListener("click", () => {
 
 // ─── Brief panel ───────────────────────────────────────────────
 
-// Sprint 9 (F1): Simple Mode brief — plain prose, no selectors, no emoji headers
+// Sprint 9 (F1): Simple Mode brief — plain prose, no selectors, no emoji headers, chronological
 function buildSimpleBriefText() {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", {
@@ -1221,13 +1226,13 @@ function buildSimpleBriefText() {
     ``,
   ];
 
-  const sorted = briefSortMode === "chronological"
-    ? [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
-    : [...notes];
+  // Always chronological in Simple Mode — sort toggle is hidden
+  const sorted = [...notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
   sorted.forEach((note, i) => {
     if (i > 0) lines.push(``);
-    lines.push(note.text);
+    const label = note.elementLabel || note.elementName || "General";
+    lines.push(`${label}: ${note.text}`);
   });
 
   lines.push(``);

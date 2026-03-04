@@ -1760,9 +1760,9 @@ html, body {
 
 /* ─── Brief Reader — document typography (2g) ──────────────────── */
 .brief-reader-panel .brief-panel__content {
-  font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 1.75;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.6;
   padding: 24px;
   color: var(--ink);
   background: var(--warm-white);
@@ -1801,7 +1801,7 @@ html, body {
 
 .brief-reader-panel .brief-panel__content p {
   margin: 0 0 10px;
-  line-height: 1.75;
+  line-height: 1.6;
 }
 
 .brief-reader-panel .brief-panel__content strong {
