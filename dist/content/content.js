@@ -799,23 +799,27 @@
       if (label) label.style.opacity = "0";
     }
   }
-  function showEscHint() {
-    if (document.getElementById(ESC_HINT_ID)) return;
-    const hint = document.createElement("div");
+  function showEscHint(text) {
+    let hint = document.getElementById(ESC_HINT_ID);
+    if (hint) {
+      hint.textContent = text || "Press Esc to deselect";
+      return;
+    }
+    hint = document.createElement("div");
     hint.id = ESC_HINT_ID;
-    hint.textContent = "Press Esc to deselect";
+    hint.textContent = text || "Press Esc to deselect";
     Object.assign(hint.style, {
       position: "fixed",
-      top: "12px",
+      top: "56px",
       left: "50%",
       transform: "translateX(-50%)",
-      background: "rgba(26, 39, 68, 0.92)",
+      background: "rgba(26, 39, 68, 0.565)",
       color: "#FAF8F3",
       fontSize: "11px",
       fontFamily: "monospace",
       letterSpacing: "0.08em",
-      padding: "4px 12px",
-      borderRadius: "4px",
+      padding: "5px 16px",
+      borderRadius: "20px",
       zIndex: "2147483645",
       pointerEvents: "none",
       whiteSpace: "nowrap"
@@ -962,6 +966,7 @@
     }
     setRingMode("hover");
     positionRing(target);
+    showEscHint("Press Esc to cancel");
     const selector = getSelector(target);
     if (selector) {
       sendToSidebar({ type: "ELEMENT_HOVERED", selector });
@@ -970,6 +975,7 @@
   function onMouseout() {
     if (!isActive || selectedEl) return;
     hideRing();
+    hideEscHint();
     sendToSidebar({ type: "ELEMENT_HOVER_END" });
   }
   function onClick(e) {
@@ -990,7 +996,7 @@
     currentLockedSelector = selector;
     setRingMode("selected");
     positionRing(target);
-    showEscHint();
+    showEscHint("Press Esc to deselect");
     console.log(
       "Markup: selected \u2192",
       target.tagName + (target.id ? "#" + target.id : "") + (typeof target.className === "string" && target.className ? "." + target.className.trim().split(/\s+/).slice(0, 3).join(".") : ""),

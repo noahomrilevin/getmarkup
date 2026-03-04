@@ -88,8 +88,9 @@ const filterTabEls       = document.querySelectorAll(".filter-tab");
 const briefPanel         = document.getElementById("brief-output");
 const briefContent       = document.getElementById("brief-content");
 const briefGenerating    = document.getElementById("brief-generating");
-const copyBriefBtn       = document.getElementById("copy-brief");
-const downloadBriefBtn   = document.getElementById("download-brief");
+const copyBriefBtn       = document.getElementById("copyBriefBtn");
+const downloadZipBtn     = document.getElementById("downloadZipBtn");
+const downloadHtmlBtn    = document.getElementById("downloadHtmlBtn");
 const closeBriefBtn      = document.getElementById("close-brief");
 const briefsArchiveBtn   = document.getElementById("briefs-archive-btn");
 const briefsArchivePanelEl = document.getElementById("briefs-archive-panel");
@@ -179,15 +180,24 @@ async function safeSet(data) {
 // ─── Sprint 9: Developer Mode ──────────────────────────────────
 function applyDevMode(enabled) {
   devMode = enabled;
-  // DEV badge
-  if (devBadgeEl) devBadgeEl.hidden = !enabled;
+  // Mode chip: DEV or SIMPLE (chip text set here; visibility set by loadDevMode)
+  if (devBadgeEl) {
+    devBadgeEl.textContent = enabled ? "DEV" : "SIMPLE";
+    devBadgeEl.hidden = false;
+  }
   // Show/hide sort toggle (only meaningful in Developer Mode)
   if (briefSortToggleEl) briefSortToggleEl.hidden = !enabled;
   // Show/hide type and severity pickers
   if (noteTypesRow) noteTypesRow.classList.toggle("dev-mode-hidden", !enabled);
   if (noteSeveritiesRow) noteSeveritiesRow.classList.toggle("dev-mode-hidden", !enabled);
-  // Show/hide selector row (only when active + devMode, or just when active for both)
-  // Selector row visibility is already managed by setToggleState + element selection.
+  // Filter tabs only visible in Developer Mode
+  if (filterTabsEl) filterTabsEl.hidden = !enabled;
+  // Note input placeholder
+  if (noteInput) {
+    noteInput.placeholder = enabled
+      ? "Describe the issue… or speak via Wispr Flow"
+      : "What do you notice?";
+  }
   // In simple mode, always hide selector-row regardless.
   if (!enabled) {
     selectorRow.hidden = true;
@@ -204,10 +214,24 @@ function applyDevMode(enabled) {
 }
 
 async function loadDevMode() {
-  const stored = await safeGet(DEV_MODE_KEY, false);
-  devMode = !!stored;
-  if (devModeToggle) devModeToggle.checked = devMode;
-  applyDevMode(devMode);
+  // null = never explicitly set → hide chip entirely (S02 state)
+  const stored = await safeGet(DEV_MODE_KEY, null);
+  if (stored === null) {
+    devMode = true;
+    if (devModeToggle) devModeToggle.checked = true;
+    if (devBadgeEl) devBadgeEl.hidden = true;
+    // Apply developer mode visuals without showing chip (S02 state)
+    if (briefSortToggleEl) briefSortToggleEl.hidden = false;
+    if (noteTypesRow) noteTypesRow.classList.remove("dev-mode-hidden");
+    if (noteSeveritiesRow) noteSeveritiesRow.classList.remove("dev-mode-hidden");
+    if (filterTabsEl) filterTabsEl.hidden = false;
+    if (noteInput) noteInput.placeholder = "Describe the issue… or speak via Wispr Flow";
+    renderNotesList();
+  } else {
+    devMode = !!stored;
+    if (devModeToggle) devModeToggle.checked = devMode;
+    applyDevMode(devMode);
+  }
 }
 
 async function setDevMode(enabled) {
@@ -1054,6 +1078,14 @@ function enterEditMode(note) {
   }
   saveBtn.textContent = "Update Note";
   updateClearSelectorVisibility();
+  // Dim other cards, mark active card
+  const notesList = document.getElementById("notes-list");
+  if (notesList) notesList.classList.add("is-editing-mode");
+  const activeCard = document.querySelector(`.note-card[data-note-id="${note.id}"]`);
+  if (activeCard) activeCard.classList.add("note-card--editing");
+  // Center the Update Note button
+  const saveRow = saveBtn?.closest(".save-row");
+  if (saveRow) saveRow.classList.add("is-editing");
   noteInput.focus();
 }
 
@@ -1069,6 +1101,13 @@ function exitEditMode() {
   saveBtn.textContent = "Save Note";
   selectorDisplay.textContent = currentSelector || "Hover to preview element";
   updateClearSelectorVisibility();
+  // Restore card opacity
+  const notesList = document.getElementById("notes-list");
+  if (notesList) notesList.classList.remove("is-editing-mode");
+  document.querySelectorAll(".note-card--editing").forEach((c) => c.classList.remove("note-card--editing"));
+  // Restore save row layout
+  const saveRow = saveBtn?.closest(".save-row");
+  if (saveRow) saveRow.classList.remove("is-editing");
 }
 
 // ─── Delete note ───────────────────────────────────────────────
@@ -1379,16 +1418,199 @@ copyBriefBtn.addEventListener("click", async () => {
   }
 });
 
-downloadBriefBtn.addEventListener("click", () => {
+// ─── Download .zip (Sprint 10 stub — JSZip not available) ─────
+// When JSZip is added, replace this stub with real zip generation:
+//   brief.md + /images/ folder with all screenshots.
+downloadZipBtn.addEventListener("click", () => {
+  console.log("Markup: ZIP not yet implemented — JSZip not available. Falling back to .md download.");
   const text = briefContent.textContent;
   const dateStr = new Date().toISOString().slice(0, 10);
+  let domain = currentTabUrl;
+  try { domain = new URL(currentTabUrl).hostname; } catch { /* use full url */ }
   const blob = new Blob([text], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `markup-brief-${dateStr}.md`;
+  a.download = `markup-brief-${domain}-${dateStr}.md`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+// ─── Export as HTML report (Sprint 10) ────────────────────────
+downloadHtmlBtn.addEventListener("click", () => {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  let domain = currentTabUrl;
+  try { domain = new URL(currentTabUrl).hostname; } catch { /* use full url */ }
+
+  const project = sessionTitle || tabTitle || domain;
+  const mode = devMode ? "Developer Mode" : "Simple Mode";
+
+  // Severity summary chips (non-zero counts only)
+  const sevCounts = {};
+  for (const s of SEVERITY_ORDER) {
+    sevCounts[s] = notes.filter((n) => (n.severity || "medium") === s).length;
+  }
+  const summaryChips = SEVERITY_ORDER
+    .filter((s) => sevCounts[s] > 0)
+    .map((s) => {
+      const cfg = SEVERITY_CONFIG[s];
+      return `<span class="severity-chip chip-${s}">${sevCounts[s]} ${cfg.label}</span>`;
+    })
+    .join("\n    ");
+
+  // Notes grouped by severity
+  const sections = SEVERITY_ORDER
+    .map((sev) => {
+      const sevNotes = notes.filter((n) => (n.severity || "medium") === sev);
+      if (sevNotes.length === 0) return "";
+      const cfg = SEVERITY_CONFIG[sev];
+      const sorted = [...sevNotes].sort(
+        (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+      );
+      const noteItems = sorted.map((note) => {
+        const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+        const selectorLine = (devMode && note.selector)
+          ? `<div class="note-selector">${escapeHtml(note.selector)}</div>` : "";
+        const typeChip = devMode
+          ? `<span class="type-chip">${escapeHtml(typeCfg.label)}</span>` : "";
+        return `      <div class="note-entry ${sev}">
+        ${selectorLine}${typeChip}
+        <div class="note-body">${escapeHtml(note.text)}</div>
+      </div>`;
+      }).join("\n");
+      return `    <div class="section-header">${cfg.emoji} ${cfg.label} (${sevNotes.length})</div>
+${noteItems}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Markup Report \u2014 ${escapeHtml(domain)}</title>
+  <style>
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: #F5F0E8;
+      color: #0D0D0D;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    .report-header {
+      border-bottom: 2px solid #C9A84C;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    .report-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1A2744;
+      margin: 0 0 4px 0;
+    }
+    .report-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: #6B7A99;
+      margin: 2px 0 0 0;
+    }
+    .severity-summary {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .severity-chip {
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    .chip-critical { background: #B91C1C; color: white; }
+    .chip-high     { background: #C2410C; color: white; }
+    .chip-medium   { background: #1A2744; color: white; }
+    .chip-low      { background: transparent; border: 1px solid #6B7A99; color: #6B7A99; }
+    .section-header {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #1A2744;
+      border-top: 1px solid rgba(107,122,153,0.2);
+      padding-top: 16px;
+      margin: 24px 0 12px 0;
+    }
+    .note-entry {
+      background: #FAF8F3;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .note-entry.critical { border-left: 3px solid #B91C1C; }
+    .note-entry.high     { border-left: 3px solid #C2410C; }
+    .note-entry.medium   { border-left: 3px solid #1A2744; }
+    .note-entry.low      { border-left: 3px solid #6B7A99; }
+    .note-selector {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: #6B7A99;
+      margin-bottom: 6px;
+    }
+    .type-chip {
+      display: inline-block;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(26,39,68,0.08);
+      color: #1A2744;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-bottom: 6px;
+    }
+    .note-body {
+      font-family: Georgia, serif;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #0D0D0D;
+    }
+    .report-footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(107,122,153,0.2);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #6B7A99;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="report-header">
+    <h1 class="report-title">Markup Report</h1>
+    <p class="report-meta">${escapeHtml(currentTabUrl || "Unknown URL")} &middot; ${dateStr} &middot; ${escapeHtml(mode)}</p>
+    <p class="report-meta">${escapeHtml(project)}</p>
+  </div>
+  <div class="severity-summary">
+    ${summaryChips}
+  </div>
+  ${sections}
+  <div class="report-footer">Generated by Markup &middot; getmarkup.dev</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = `markup-report-${domain}-${dateStr}.html`;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
@@ -1453,6 +1675,14 @@ if (devModeToggle) {
   devModeToggle.addEventListener("change", async (e) => {
     await setDevMode(e.target.checked);
     showToast(e.target.checked ? "Developer Mode on" : "Simple Mode on");
+  });
+}
+
+// Mode chip click — toggle between DEV / SIMPLE
+if (devBadgeEl) {
+  devBadgeEl.addEventListener("click", async () => {
+    await setDevMode(!devMode);
+    showToast(devMode ? "Developer Mode on" : "Simple Mode on");
   });
 }
 

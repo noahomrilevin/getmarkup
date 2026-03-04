@@ -77,9 +77,19 @@
         <p class="brief-generating__text">Building brief…</p>
       </div>
       <pre class="brief-panel__content" id="brief-content"></pre>
-      <div class="brief-panel__footer" id="brief-panel-footer">
-        <button class="btn-copy-brief" id="copy-brief">Copy to Clipboard</button>
-        <button class="btn-copy-brief" id="download-brief">Download .md</button>
+      <!-- Export options -->
+      <div class="brief-export-bar" id="brief-panel-footer">
+        <button id="copyBriefBtn" class="btn-export btn-copy">
+          COPY TO CLIPBOARD
+        </button>
+        <div class="brief-export-downloads">
+          <button id="downloadZipBtn" class="btn-export btn-zip">
+            DOWNLOAD .MD + IMAGES
+          </button>
+          <button id="downloadHtmlBtn" class="btn-export btn-html">
+            EXPORT AS REPORT
+          </button>
+        </div>
       </div>
     </div>
 
@@ -147,7 +157,7 @@
 
     <!-- 9–11 · Divider + toggle + activation hint -->
     <div class="markup-toggle-section" id="markup-toggle-section">
-      <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="Toggle element selection mode">Elements OFF</button>
+      <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="Select Element — activate element selection">Select Element</button>
       <p class="activation-hint" id="activation-hint" aria-live="polite" hidden>Reload the page to activate Markup.</p>
     </div>
 

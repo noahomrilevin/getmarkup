@@ -1042,6 +1042,10 @@ html, body {
   text-align: center;
 }
 
+.markup-toggle-section .toggle-btn--on {
+  border: 1px solid var(--gold);
+}
+
 /* Activation hint inside toggle section — no banner bg, no bottom border */
 .markup-toggle-section .activation-hint {
   background: transparent;
@@ -1066,6 +1070,32 @@ html, body {
 .save-row .save-hint {
   flex: 1;
   text-align: right;
+}
+
+/* Edit mode: UPDATE NOTE button centered, hint hidden */
+.save-row.is-editing {
+  justify-content: center;
+}
+
+.save-row.is-editing .btn-save {
+  flex: none;
+  min-width: 140px;
+}
+
+.save-row.is-editing .save-hint {
+  display: none;
+}
+
+/* Edit mode: dim non-active note cards */
+.markup-notes.is-editing-mode .note-card:not(.note-card--editing) {
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.markup-notes.is-editing-mode .note-card--editing {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ─── Viewing URL line (Fix 1) ────────────────────────────────── */
@@ -1965,6 +1995,15 @@ a:focus-visible {
   display: none !important;
 }
 
+.dev-badge {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dev-badge:hover {
+  opacity: 0.8;
+}
+
 /* ─── Settings toggle switch (1) ───────────────────────────────── */
 .settings-toggle-row {
   display: flex;
@@ -2146,4 +2185,61 @@ a:focus-visible {
 .brief-reader-panel .btn-copy-brief:hover {
   filter: brightness(1.1);
   opacity: 1;
+}
+
+/* ─── Brief export bar (Sprint 10) ───────────────────────────── */
+.brief-export-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--paper);
+  border-top: 1px solid rgba(107,122,153,0.2);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.brief-export-downloads {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-export {
+  height: 44px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s ease;
+}
+
+.btn-copy {
+  background: var(--gold);
+  color: var(--deep-blue);
+  width: 100%;
+}
+
+.btn-zip {
+  background: var(--deep-blue);
+  color: var(--gold);
+  flex: 1;
+}
+
+.btn-html {
+  background: var(--deep-blue);
+  color: var(--gold);
+  flex: 1;
+}
+
+.btn-export:hover {
+  opacity: 0.85;
+}
+
+.btn-export:active {
+  opacity: 0.7;
 }
