@@ -681,9 +681,18 @@
   var CURSOR_STYLE_ID = "__markup-cursor";
   var BADGE_CLASS = "__markup-badge";
   var HIGHLIGHT_COLOR = "#FF8400";
+  if (window !== window.top) {
+    try {
+      chrome.runtime.sendMessage({ type: "IFRAME_DETECTED" }).catch(() => {
+      });
+    } catch {
+    }
+    throw new Error("Markup: iframe detected \u2014 content script passive");
+  }
   var ring = null;
   var selectedEl = null;
   var isActive = false;
+  var currentLockedSelector = null;
   var mutationObserver = null;
   var reposTimeout = null;
   window["__mkp_" + chrome.runtime.id + "_ready"] = true;
@@ -709,7 +718,22 @@
       if (reposTimeout) clearTimeout(reposTimeout);
       reposTimeout = setTimeout(() => {
         reposTimeout = null;
-        if (isActive && selectedEl) positionRing(selectedEl);
+        if (!isActive || !selectedEl) return;
+        if (currentLockedSelector) {
+          let found = null;
+          try {
+            found = document.querySelector(currentLockedSelector);
+          } catch {
+          }
+          if (!found) {
+            clearSelection();
+            return;
+          }
+          if (!document.body.contains(selectedEl)) {
+            selectedEl = found;
+          }
+        }
+        positionRing(selectedEl);
       }, 300);
     });
     mutationObserver.observe(target, { childList: true, subtree: true });
@@ -775,23 +799,27 @@
       if (label) label.style.opacity = "0";
     }
   }
-  function showEscHint() {
-    if (document.getElementById(ESC_HINT_ID)) return;
-    const hint = document.createElement("div");
+  function showEscHint(text) {
+    let hint = document.getElementById(ESC_HINT_ID);
+    if (hint) {
+      hint.textContent = text || "Press Esc to deselect";
+      return;
+    }
+    hint = document.createElement("div");
     hint.id = ESC_HINT_ID;
-    hint.textContent = "Press Esc to deselect";
+    hint.textContent = text || "Press Esc to deselect";
     Object.assign(hint.style, {
       position: "fixed",
-      top: "12px",
+      top: "56px",
       left: "50%",
       transform: "translateX(-50%)",
-      background: "rgba(26, 39, 68, 0.92)",
+      background: "rgba(26, 39, 68, 0.565)",
       color: "#FAF8F3",
       fontSize: "11px",
       fontFamily: "monospace",
       letterSpacing: "0.08em",
-      padding: "4px 12px",
-      borderRadius: "4px",
+      padding: "5px 16px",
+      borderRadius: "20px",
       zIndex: "2147483645",
       pointerEvents: "none",
       whiteSpace: "nowrap"
@@ -925,6 +953,7 @@
   }
   function clearSelection() {
     selectedEl = null;
+    currentLockedSelector = null;
     hideRing();
     hideEscHint();
     sendToSidebar({ type: "ELEMENT_DESELECTED" });
@@ -937,6 +966,7 @@
     }
     setRingMode("hover");
     positionRing(target);
+    showEscHint("Press Esc to cancel");
     const selector = getSelector(target);
     if (selector) {
       sendToSidebar({ type: "ELEMENT_HOVERED", selector });
@@ -945,6 +975,7 @@
   function onMouseout() {
     if (!isActive || selectedEl) return;
     hideRing();
+    hideEscHint();
     sendToSidebar({ type: "ELEMENT_HOVER_END" });
   }
   function onClick(e) {
@@ -962,9 +993,10 @@
     const selector = getSelector(target);
     if (!selector) return;
     selectedEl = target;
+    currentLockedSelector = selector;
     setRingMode("selected");
     positionRing(target);
-    showEscHint();
+    showEscHint("Press Esc to deselect");
     console.log(
       "Markup: selected \u2192",
       target.tagName + (target.id ? "#" + target.id : "") + (typeof target.className === "string" && target.className ? "." + target.className.trim().split(/\s+/).slice(0, 3).join(".") : ""),

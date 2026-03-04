@@ -156,9 +156,10 @@ html, body {
 
 .markup-title {
   font-family: var(--font-display);
+  font-style: italic;
   font-size: var(--size-lg);
-  font-weight: 700;
-  color: var(--warm-white);
+  font-weight: 400;
+  color: var(--gold);
   letter-spacing: -0.01em;
   flex: 1;
 }
@@ -342,14 +343,20 @@ html, body {
 /* ─── NoteCard ────────────────────────────────────────────────── */
 .note-card {
   background: var(--warm-white);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(201, 168, 76, 0.2);
   border-radius: var(--radius-m);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  padding: var(--space-sm);
+  box-shadow: 0 1px 4px rgba(26, 39, 68, 0.06);
+  padding: 16px;
   margin-bottom: var(--space-sm);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.note-card:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 2px 8px rgba(26, 39, 68, 0.1);
 }
 
 .note-card__header {
@@ -379,16 +386,21 @@ html, body {
   border: none;
   border-radius: var(--radius-m);
   padding: var(--space-sm) var(--space-md);
-  font-family: var(--font-body);
-  font-size: var(--size-base);
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--size-sm);
+  font-weight: 500;
+  letter-spacing: 0.06em;
   cursor: pointer;
   width: 100%;
-  transition: opacity 0.2s ease;
+  transition: filter 200ms ease, transform 200ms ease;
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.88;
+  filter: brightness(1.1);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn-primary:disabled {
@@ -479,10 +491,10 @@ html, body {
 /* ─── Toggle button ───────────────────────────────────────────── */
 .toggle-btn {
   padding: 3px var(--space-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--slate);
   border-radius: var(--radius-m);
   background: transparent;
-  color: var(--muted-foreground);
+  color: var(--slate);
   font-family: var(--font-mono);
   font-size: var(--size-xs);
   font-weight: 500;
@@ -490,31 +502,40 @@ html, body {
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease, transform 200ms ease;
+}
+
+.toggle-btn:active {
+  transform: scale(0.98);
 }
 
 .toggle-btn--on {
   background: var(--gold);
-  color: var(--ink);
+  color: var(--deep-blue);
   border-color: var(--gold);
+  font-weight: 700;
 }
 
 /* ─── Save button ─────────────────────────────────────────────── */
 .btn-save {
   background: var(--mid-blue);
-  color: var(--warm-white);
+  color: #FFFFFF;
   border: none;
   border-radius: var(--radius-m);
   padding: var(--space-sm) var(--space-md);
   font-family: var(--font-body);
   font-size: var(--size-base);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: filter 200ms ease, transform 200ms ease;
 }
 
 .btn-save:hover:not(:disabled) {
-  opacity: 0.88;
+  filter: brightness(1.1);
+}
+
+.btn-save:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn-save:disabled {
@@ -851,20 +872,25 @@ html, body {
   gap: var(--space-xs);
 }
 
-@keyframes markup-pulse {
-  0%, 100% { opacity: 0.25; }
-  50%       { opacity: 1; }
-}
-
 .brief-generating__dots span {
   color: var(--gold);
   font-size: 20px;
   line-height: 1;
-  animation: markup-pulse 1.2s ease-in-out infinite;
 }
 
-.brief-generating__dots span:nth-child(2) { animation-delay: 0.2s; }
-.brief-generating__dots span:nth-child(3) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes markup-pulse {
+    0%, 100% { opacity: 0.25; }
+    50%       { opacity: 1; }
+  }
+
+  .brief-generating__dots span {
+    animation: markup-pulse 1.2s ease-in-out infinite;
+  }
+
+  .brief-generating__dots span:nth-child(2) { animation-delay: 0.2s; }
+  .brief-generating__dots span:nth-child(3) { animation-delay: 0.4s; }
+}
 
 /* ─── Severity picker buttons ─────────────────────────────────── */
 .note-form__severities {
@@ -1016,6 +1042,10 @@ html, body {
   text-align: center;
 }
 
+.markup-toggle-section .toggle-btn--on {
+  border: 1px solid var(--gold);
+}
+
 /* Activation hint inside toggle section — no banner bg, no bottom border */
 .markup-toggle-section .activation-hint {
   background: transparent;
@@ -1040,6 +1070,32 @@ html, body {
 .save-row .save-hint {
   flex: 1;
   text-align: right;
+}
+
+/* Edit mode: UPDATE NOTE button centered, hint hidden */
+.save-row.is-editing {
+  justify-content: center;
+}
+
+.save-row.is-editing .btn-save {
+  flex: none;
+  min-width: 140px;
+}
+
+.save-row.is-editing .save-hint {
+  display: none;
+}
+
+/* Edit mode: dim non-active note cards */
+.markup-notes.is-editing-mode .note-card:not(.note-card--editing) {
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.markup-notes.is-editing-mode .note-card--editing {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ─── Viewing URL line (Fix 1) ────────────────────────────────── */
@@ -1732,45 +1788,49 @@ html, body {
   color: var(--ink);
 }
 
-/* ─── Brief Reader — markdown content override ─────────────────── */
+/* ─── Brief Reader — document typography (2g) ──────────────────── */
 .brief-reader-panel .brief-panel__content {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 24px;
   color: var(--ink);
+  background: var(--warm-white);
   white-space: normal;
 }
 
 .brief-reader-panel .brief-panel__content h1 {
   font-family: var(--font-display);
   font-style: italic;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 400;
   color: var(--deep-blue);
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   line-height: 1.3;
 }
 
 .brief-reader-panel .brief-panel__content h2 {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0em;
+  text-transform: none;
   color: var(--deep-blue);
   border-bottom: 1px solid var(--border);
-  padding-bottom: 4px;
-  margin: 16px 0 8px;
+  padding-bottom: 6px;
+  margin: 24px 0 10px;
 }
 
 .brief-reader-panel .brief-panel__content h3 {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.04em;
   color: var(--slate);
-  margin: 10px 0 4px;
+  margin: 16px 0 6px;
 }
 
 .brief-reader-panel .brief-panel__content p {
-  margin: 0 0 6px;
+  margin: 0 0 10px;
   line-height: 1.6;
 }
 
@@ -1781,17 +1841,405 @@ html, body {
 
 .brief-reader-panel .brief-panel__content code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   background: rgba(201, 168, 76, 0.1);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   color: var(--slate);
+  letter-spacing: 0.04em;
 }
 
 .brief-reader-panel .brief-panel__content hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 10px 0;
+  margin: 16px 0;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   Sprint 9 — Design Excellence, Developer Mode, Accessibility
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Global interactive element transitions (2a) ──────────────── */
+.icon-btn, .btn-activate, .btn-settings-action, .btn-settings-danger,
+.btn-copy-brief, .btn-brief-open, .btn-history-view, .filter-tab,
+.type-btn, .severity-btn, .brief-sort-btn, .brief-back-link,
+.clear-confirm__yes, .clear-confirm__no,
+.note-pending-prompt__save, .note-pending-prompt__discard {
+  transition: all 200ms ease;
+}
+
+/* Active scale for action buttons */
+.btn-activate:active, .btn-settings-action:active,
+.btn-copy-brief:active, .btn-brief-open:active,
+.filter-tab:active, .type-btn:active, .severity-btn:active,
+.brief-sort-btn:active, .brief-back-link:active {
+  transform: scale(0.98);
+}
+
+/* ─── Focus rings — universal (2d) ────────────────────────────── */
+*:focus { outline: none; }
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="tab"]:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ─── Note card animations (2a) ────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes noteCardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes noteCardOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-4px); }
+  }
+
+  .note-card {
+    animation: noteCardIn 200ms ease forwards;
+  }
+
+  .note-card--exiting {
+    animation: noteCardOut 150ms ease forwards;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-card--exiting { display: none; }
+}
+
+/* ─── Note card hover — edit/delete buttons (2j) ──────────────── */
+.note-card .edit-btn,
+.note-card .delete-btn {
+  opacity: 0;
+}
+
+.note-card:hover .edit-btn,
+.note-card:hover .delete-btn,
+.note-card:focus-within .edit-btn,
+.note-card:focus-within .delete-btn {
+  opacity: 1;
+}
+
+/* ─── Selector chip states (2i) ────────────────────────────────── */
+.selector-chip--empty {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.selector-chip--filled {
+  border-left: 2px solid var(--gold);
+  color: var(--ink);
+  padding-left: 8px;
+  font-size: var(--size-sm);
+}
+
+/* ─── Empty state typography (2e) ──────────────────────────────── */
+.empty-state__heading {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--size-lg);
+  font-weight: 400;
+  color: var(--deep-blue);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.empty-state__body {
+  font-family: var(--font-body);
+  font-size: var(--size-base);
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  max-width: 220px;
+  text-align: center;
+  margin: 0;
+}
+
+.empty-state__hint {
+  font-family: var(--font-mono);
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin: 0;
+}
+
+/* ─── Developer Mode badge (1) ──────────────────────────────────── */
+.dev-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ─── Dev mode visibility helper ───────────────────────────────── */
+.dev-mode-hidden {
+  display: none !important;
+}
+
+.dev-badge {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dev-badge:hover {
+  opacity: 0.8;
+}
+
+/* ─── Settings toggle switch (1) ───────────────────────────────── */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.settings-toggle-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settings-toggle-label {
+  font-family: var(--font-body);
+  font-size: var(--size-base);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.settings-toggle-desc {
+  font-family: var(--font-body);
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-switch__track {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--muted);
+  border-radius: 20px;
+  transition: background 200ms ease;
+}
+
+.toggle-switch__track::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 200ms ease;
+}
+
+.toggle-switch input:checked + .toggle-switch__track {
+  background: var(--gold);
+}
+
+.toggle-switch input:checked + .toggle-switch__track::before {
+  transform: translateX(16px);
+}
+
+.toggle-switch input:focus-visible + .toggle-switch__track {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ─── Iframe notice (4b) ────────────────────────────────────────── */
+.iframe-notice {
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  background: rgba(201, 138, 4, 0.1);
+  color: #7a5500;
+  border-bottom: 1px solid rgba(201, 138, 4, 0.2);
+  flex-shrink: 0;
+}
+
+/* ─── Version footer — reload button (4c) ──────────────────────── */
+.markup-version-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px var(--space-md);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--paper);
+}
+
+.btn-reload {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--slate);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.5;
+  transition: opacity 200ms ease;
+}
+
+.btn-reload:hover { opacity: 1; }
+
+.markup-version-footer__text {
+  margin-left: auto;
+}
+
+/* ─── Briefs archive empty state (2e) ───────────────────────────── */
+.briefs-archive__empty-heading {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--size-lg);
+  font-weight: 400;
+  color: var(--slate);
+  display: block;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.briefs-archive__empty-body {
+  font-family: var(--font-body);
+  font-size: var(--size-sm);
+  color: var(--muted-foreground);
+  display: block;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ─── Note card highlighted (badge click) ───────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes noteCardFlash {
+    0%   { box-shadow: 0 0 0 2px var(--gold); }
+    100% { box-shadow: 0 1px 4px rgba(26, 39, 68, 0.06); }
+  }
+  .note-card--highlighted {
+    animation: noteCardFlash 1.2s ease forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-card--highlighted { border-color: var(--gold); }
+}
+
+/* ─── Icon button min tap target ────────────────────────────────── */
+.icon-btn {
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Brief reader panel footer on light bg ─────────────────────── */
+.brief-reader-panel .brief-panel__footer {
+  background: var(--warm-white);
+  border-top: 1px solid var(--border);
+}
+
+.brief-reader-panel .btn-copy-brief {
+  background: var(--deep-blue);
+  color: var(--gold);
+}
+
+.brief-reader-panel .btn-copy-brief:hover {
+  filter: brightness(1.1);
+  opacity: 1;
+}
+
+/* ─── Brief export bar (Sprint 10) ───────────────────────────── */
+.brief-export-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--paper);
+  border-top: 1px solid rgba(107,122,153,0.2);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.brief-export-downloads {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-export {
+  height: 44px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s ease;
+}
+
+.btn-copy {
+  background: var(--gold);
+  color: var(--deep-blue);
+  width: 100%;
+}
+
+.btn-zip {
+  background: var(--deep-blue);
+  color: var(--gold);
+  flex: 1;
+}
+
+.btn-html {
+  background: var(--deep-blue);
+  color: var(--gold);
+  flex: 1;
+}
+
+.btn-export:hover {
+  opacity: 0.85;
+}
+
+.btn-export:active {
+  opacity: 0.7;
+}
