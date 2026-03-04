@@ -1,6 +1,6 @@
 node_modules/
 .DS_Store
-docs/
+.claude/
 reviewbrief/
 *.pen
 dist/
