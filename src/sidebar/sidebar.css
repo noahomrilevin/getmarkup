@@ -1592,6 +1592,30 @@ html, body {
   border-bottom: 2px solid var(--gold);
 }
 
+/* ─── Notes list header: clear all link ─────────────────────── */
+.notes-list-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px var(--space-md) 0;
+}
+
+.btn-clear-all-notes {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  color: var(--slate);
+  opacity: 0.6;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.btn-clear-all-notes:hover {
+  opacity: 1;
+  color: var(--destructive);
+}
+
 /* ─── Toggle section (nested inside markup-actions) ──────────── */
 .markup-toggle-section {
   display: flex;
@@ -1609,6 +1633,17 @@ html, body {
 .bottom-btn-row .btn-primary {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* ─── Simple Mode: SCREENSHOT + GENERATE BRIEF side by side ──── */
+.bottom-btn-row--simple {
+  flex-wrap: nowrap;
+}
+.bottom-btn-row--simple .bottom-select-group {
+  flex: 1 1 auto;
+}
+.bottom-btn-row--simple .btn-primary {
+  flex: 1 1 auto;
 }
 
 /* ─── Select group: SCREENSHOT + SELECT ELEMENT ───────────────── */
@@ -1969,6 +2004,7 @@ html, body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  max-height: 100%;
   overflow: hidden;
   background: var(--paper);
 }
@@ -2016,6 +2052,13 @@ html, body {
   letter-spacing: 0;
   text-transform: none;
   color: var(--foreground);
+}
+
+.settings-section__desc {
+  font-size: 11px;
+  color: var(--slate);
+  opacity: 0.7;
+  margin: 2px 0 8px;
 }
 
 .settings-section__actions {
@@ -2233,7 +2276,8 @@ html, body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 100%;
   background: var(--paper);
 }
 

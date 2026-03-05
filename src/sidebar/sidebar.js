@@ -362,6 +362,9 @@ function applyDevMode(enabled) {
   }
   // Hide SELECT ELEMENT toggle in Simple Mode — Dev Mode only control
   if (toggleBtn) toggleBtn.hidden = !enabled;
+  // Simple Mode: SCREENSHOT + GENERATE BRIEF side by side (no SELECT ELEMENT)
+  const bottomRow = document.querySelector(".bottom-btn-row");
+  if (bottomRow) bottomRow.classList.toggle("bottom-btn-row--simple", !enabled);
   // In simple mode, always hide selector-row regardless.
   if (!enabled) {
     selectorRow.hidden = true;
@@ -454,11 +457,6 @@ async function showOnboardingCardIfNeeded() {
 // ─── Sprint 9: Toggle state ──────────────────────────────────────
 function setToggleState(active) {
   markupActive = active;
-  // Sprint 11 Pass 15: screenshot button enabled only when markup is ON
-  if (screenshotBtn) {
-    screenshotBtn.disabled = !active;
-    screenshotBtn.setAttribute("aria-disabled", active ? "false" : "true");
-  }
   if (active) {
     toggleBtn.textContent = "STOP SELECTING";
     toggleBtn.classList.add("toggle-btn--on");
@@ -679,7 +677,10 @@ function updateClearSelectorVisibility() {
 }
 
 function updateClearAllVisibility() {
-  if (clearAllBtn) clearAllBtn.hidden = notes.length === 0;
+  const header = document.getElementById("notes-list-header");
+  const hasNotes = notes.length > 0;
+  if (header) header.hidden = !hasNotes;
+  if (clearAllBtn) clearAllBtn.hidden = !hasNotes;
 }
 
 // ─── Storage — notes ──────────────────────────────────────────
@@ -856,6 +857,7 @@ async function renameBriefEntry(id, name) {
 
 // ─── Briefs Archive view ───────────────────────────────────────
 function showBriefsArchive() {
+  closeAllOverlayPanels();
   notesList.hidden = true;
   sessionTitleWrap.hidden = true;
   filterTabsEl.hidden = true;
@@ -1767,7 +1769,7 @@ function dataUrlToArrayBuffer(dataUrl) {
 // Screenshot button: send ENTER_SCREENSHOT_MODE to content script
 if (screenshotBtn) {
   screenshotBtn.addEventListener("click", async () => {
-    if (!markupActive || !currentTabId) return;
+    if (!currentTabId) return;
     chrome.tabs.sendMessage(currentTabId, { type: "ENTER_SCREENSHOT_MODE" }).catch(() => {});
   });
 }
@@ -2568,8 +2570,15 @@ downloadHtmlBtn.addEventListener("click", async () => {
 
 closeBriefBtn.addEventListener("click", hideBrief);
 
+// ─── Panel mutual exclusion ────────────────────────────────────
+function closeAllOverlayPanels() {
+  if (settingsPanel) settingsPanel.hidden = true;
+  if (briefsArchivePanelEl) briefsArchivePanelEl.hidden = true;
+}
+
 // ─── Sprint 8 F10: Settings panel ─────────────────────────────
 function showSettings() {
+  closeAllOverlayPanels();
   notesList.hidden = true;
   sessionTitleWrap.hidden = true;
   filterTabsEl.hidden = true;
@@ -2725,7 +2734,8 @@ settingsClearAllBtn.addEventListener("click", async () => {
 
 // Export JSON
 exportJsonBtn.addEventListener("click", () => {
-  const data = JSON.stringify(notes, null, 2);
+  const exportNotes = notes.map(({ imageThumbnail, ...rest }) => rest);
+  const data = JSON.stringify(exportNotes, null, 2);
   const blob = new Blob([data], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2738,14 +2748,17 @@ exportJsonBtn.addEventListener("click", () => {
 
 // Export CSV
 exportCsvBtn.addEventListener("click", () => {
-  const headers = ["id", "type", "severity", "selector", "elementLabel", "text", "createdAt"];
+  const headers = ["id", "url", "type", "severity", "selector", "elementLabel", "location", "parentContext", "text", "createdAt"];
   const rows = notes.map((n) =>
     [
       n.id,
+      currentNoteUrl || "",
       n.type,
       n.severity || "medium",
       n.selector || "",
       n.elementLabel || "",
+      n.location || "",
+      n.parentContext || "",
       n.text,
       new Date(n.createdAt || 0).toISOString(),
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")

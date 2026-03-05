@@ -62,6 +62,11 @@
       <button class="filter-tab" data-filter="low" role="tab" aria-selected="false">LOW</button>
     </div>
 
+    <!-- Clear all notes link — shown when notes exist -->
+    <div class="notes-list-header" id="notes-list-header" hidden>
+      <button class="btn-clear-all-notes" id="clear-all">Clear all</button>
+    </div>
+
     <!-- Note pending prompt — shown when unsaved text exists and a new element is selected -->
     <div class="note-pending-prompt" id="note-pending-prompt" hidden>
       <span class="note-pending-prompt__msg">Save note before switching?</span>
@@ -146,18 +151,6 @@
           <button type="button" class="image-folder-banner__cta" id="image-folder-choose">CHOOSE FOLDER →</button>
         </div>
 
-        <textarea
-          class="note-form__input"
-          id="note-input"
-          placeholder="Describe the issue… or speak via Wispr Flow"
-          rows="3"
-          aria-label="Note text — describe the issue or speak via Wispr Flow"
-        ></textarea>
-
-        <div class="voice-notes-hint">
-          <a class="voice-notes-link" id="voice-notes-settings-link" href="#">🎙 Voice notes</a>
-        </div>
-
         <!-- Location field — both modes. Dev: pre-filled with selector; Simple: pre-filled with element label -->
         <div class="note-location-row" id="note-location-row">
           <label class="note-location-label" for="note-location">Location (optional)</label>
@@ -172,10 +165,22 @@
           <span class="note-location-hint">Leave blank to use element label in Brief</span>
         </div>
 
+        <textarea
+          class="note-form__input"
+          id="note-input"
+          placeholder="Describe the issue… or speak via Wispr Flow"
+          rows="3"
+          aria-label="Note text — describe the issue or speak via Wispr Flow"
+        ></textarea>
+
         <!-- Image preview — shown after paste, before save -->
         <div class="image-preview-wrap" id="image-preview-wrap" hidden>
           <img class="image-preview__thumb" id="image-preview-thumb" alt="Pasted image" />
           <button type="button" class="image-preview__remove" id="image-preview-remove" aria-label="Remove image">✕</button>
+        </div>
+
+        <div class="voice-notes-hint">
+          <a class="voice-notes-link" id="voice-notes-settings-link" href="#">🎙 Voice notes</a>
         </div>
       </form>
 
@@ -195,7 +200,7 @@
       <div class="markup-toggle-section" id="markup-toggle-section">
         <div class="bottom-btn-row">
           <div class="bottom-select-group">
-            <button class="btn-screenshot" id="screenshot-btn" disabled aria-disabled="true" aria-label="Capture a screenshot region">SCREENSHOT</button>
+            <button class="btn-screenshot" id="screenshot-btn" aria-label="Capture a screenshot region">SCREENSHOT</button>
             <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="SELECT ELEMENT — activate element selection">SELECT ELEMENT</button>
           </div>
           <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
@@ -264,6 +269,7 @@
         <!-- Export Notes -->
         <section class="settings-section">
           <h3 class="settings-section__title">Export Notes</h3>
+          <p class="settings-section__desc">All notes for this domain · Images not included</p>
           <div class="settings-section__actions">
             <button class="btn-settings-action" id="export-json">EXPORT JSON</button>
             <button class="btn-settings-action" id="export-csv">EXPORT CSV</button>
