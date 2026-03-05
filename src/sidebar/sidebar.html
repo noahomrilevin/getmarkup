@@ -140,6 +140,12 @@
           <button type="button" class="severity-btn severity-btn--low" data-severity="low" data-tooltip="Nice to have" aria-pressed="false">Low</button>
         </div>
 
+        <!-- Image folder banner — shown when image is pasted but no folder is set -->
+        <div class="image-folder-banner" id="image-folder-banner" hidden>
+          <span class="image-folder-banner__text">Markup needs a folder to save images. Choose once — all images save there automatically.</span>
+          <button type="button" class="image-folder-banner__cta" id="image-folder-choose">CHOOSE FOLDER →</button>
+        </div>
+
         <textarea
           class="note-form__input"
           id="note-input"
@@ -147,6 +153,30 @@
           rows="3"
           aria-label="Note text — describe the issue or speak via Wispr Flow"
         ></textarea>
+
+        <div class="voice-notes-hint">
+          <a class="voice-notes-link" id="voice-notes-settings-link" href="#">🎙 Voice notes</a>
+        </div>
+
+        <!-- Location field — both modes. Dev: pre-filled with selector; Simple: pre-filled with element label -->
+        <div class="note-location-row" id="note-location-row">
+          <label class="note-location-label" for="note-location">Location (optional)</label>
+          <input
+            class="note-location-input"
+            id="note-location"
+            type="text"
+            placeholder="e.g. Hero section, sticky nav, checkout modal..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="note-location-hint">Leave blank to use element label in Brief</span>
+        </div>
+
+        <!-- Image preview — shown after paste, before save -->
+        <div class="image-preview-wrap" id="image-preview-wrap" hidden>
+          <img class="image-preview__thumb" id="image-preview-thumb" alt="Pasted image" />
+          <button type="button" class="image-preview__remove" id="image-preview-remove" aria-label="Remove image">✕</button>
+        </div>
       </form>
 
       <div class="save-row">
@@ -160,11 +190,14 @@
       <div class="brief-sort-toggle" id="brief-sort-toggle">
         <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">BY SEVERITY</button>
         <span class="sort-sep">·</span>
-        <button class="brief-sort-btn" data-sort="chronological">BY ORDER</button>
+        <button class="brief-sort-btn" data-sort="chronological">BY CHRONOLOGICAL</button>
       </div>
       <div class="markup-toggle-section" id="markup-toggle-section">
         <div class="bottom-btn-row">
-          <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="SELECT ELEMENT — activate element selection">SELECT ELEMENT</button>
+          <div class="bottom-select-group">
+            <button class="btn-screenshot" id="screenshot-btn" disabled aria-disabled="true" aria-label="Capture a screenshot region">SCREENSHOT</button>
+            <button class="toggle-btn" id="markup-toggle" aria-pressed="false" aria-label="SELECT ELEMENT — activate element selection">SELECT ELEMENT</button>
+          </div>
           <button class="btn-primary" id="generate-brief" disabled aria-disabled="true">
             GENERATE BRIEF →
           </button>
@@ -182,6 +215,17 @@
       </div>
       <div class="settings-panel__body">
 
+        <!-- Brief Sort -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Brief Sort</h3>
+          <div class="settings-sort-row">
+            <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">Severity-grouped</button>
+            <span class="sort-sep">·</span>
+            <button class="brief-sort-btn" data-sort="chronological">Chronological</button>
+          </div>
+          <span class="settings-toggle-desc" id="brief-sort-desc">Notes grouped Critical → High → Medium → Low</span>
+        </section>
+
         <!-- Developer Mode -->
         <section class="settings-section">
           <div class="settings-toggle-row">
@@ -196,15 +240,25 @@
           </div>
         </section>
 
-        <!-- Brief Sort -->
-        <section class="settings-section">
-          <h3 class="settings-section__title">Brief Sort</h3>
-          <div class="settings-sort-row">
-            <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">SEVERITY</button>
-            <span class="sort-sep">·</span>
-            <button class="brief-sort-btn" data-sort="chronological">ORDER</button>
+        <!-- Voice Notes — Wispr Flow affiliate -->
+        <section class="settings-section settings-section--voice">
+          <div class="wispr-row">
+            <div class="wispr-row__text">
+              <span class="settings-toggle-label">🎙 Voice Notes</span>
+              <span class="settings-toggle-desc">Dictate notes hands-free with Wispr Flow.</span>
+            </div>
+            <a class="btn-wispr" id="wispr-flow-link" href="https://ref.wisprflow.ai/noah-levin-fctx" target="_blank" rel="noopener noreferrer">Try Free →</a>
           </div>
-          <span class="settings-toggle-desc">Severity-grouped (default) or chronological.</span>
+          <p class="settings-affiliate-note">Supports this open-source project.</p>
+        </section>
+
+        <!-- Images Folder -->
+        <section class="settings-section">
+          <h3 class="settings-section__title">Images Folder</h3>
+          <div class="settings-images-row">
+            <span class="settings-images-folder-name" id="settings-images-folder-name">No folder set</span>
+            <button class="btn-settings-action" id="settings-change-folder">CHANGE →</button>
+          </div>
         </section>
 
         <!-- Export Notes -->
@@ -219,12 +273,6 @@
         <!-- Storage -->
         <section class="settings-section">
           <h3 class="settings-section__title">Storage</h3>
-          <div class="storage-usage">
-            <span class="storage-usage__text" id="storage-usage-text">Checking…</span>
-            <div class="storage-usage__bar">
-              <div class="storage-usage__fill" id="storage-usage-fill" style="width:0%"></div>
-            </div>
-          </div>
           <button class="btn-settings-danger" id="settings-clear-all">CLEAR ALL NOTES</button>
         </section>
 
@@ -260,6 +308,12 @@
       </div>
     </div>
 
+    <!-- Thumbnail lightbox -->
+    <div class="img-lightbox" id="img-lightbox" hidden aria-modal="true" role="dialog" aria-label="Image viewer">
+      <button class="img-lightbox__close" id="img-lightbox-close" aria-label="Close image">✕</button>
+      <img class="img-lightbox__img" id="img-lightbox-img" alt="Full size screenshot" />
+    </div>
+
     <!-- Toast notification -->
     <div class="toast" id="toast" hidden></div>
 
@@ -271,6 +325,7 @@
 
   </div>
 
+  <script src="jszip.min.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

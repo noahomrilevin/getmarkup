@@ -34,9 +34,17 @@ const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 // ─── Storage quota constants (Sprint 8 F4) ─────────────────────
 const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
 
-// ─── Global brief archive constants ────────────────────────────
-const BRIEFS_KEY  = "markup_briefs_all";
-const BRIEFS_MAX  = 50;
+// ─── Brief title ───────────────────────────────────────────────
+function getBriefTitle() {
+  return sessionTitle ? `Markup — ${sessionTitle}` : "Markup Brief";
+}
+
+// ─── Brief archive constants ────────────────────────────────────
+const BRIEFS_MAX  = 20;
+
+function getBriefsKey() {
+  try { return `markup_briefs_${new URL(currentNoteUrl).hostname}`; } catch { return "markup_briefs_unknown"; }
+}
 
 // ─── Sprint 9: Developer Mode storage key ──────────────────────
 const DEV_MODE_KEY = "markup_dev_mode";
@@ -67,6 +75,10 @@ let activeFilter          = "all";
 let ignoreNextDeselect    = false;
 let pendingElementSelector = null;
 let pendingElementLabel    = null; // Pass 12: label paired with pendingElementSelector
+let pendingParentContext   = null; // Sprint 11 Pass 8
+let pendingElementRole     = null; // Sprint 11 Pass 8
+let currentParentContext   = null; // Sprint 11 Pass 8: parent element label
+let currentElementRole     = null; // Sprint 11 Pass 8: computed semantic role
 let briefSortMode         = "severity"; // "severity" | "chronological" — persisted
 let briefReaderCurrentBrief = null; // brief object open in reader
 let editingNoteUrl        = null; // Pass 7: URL of note being edited (may differ from currentNoteUrl)
@@ -75,6 +87,13 @@ let currentBriefText        = "";   // raw markdown for copy/download
 let timestampInterval     = null; // Sprint 8 F7: interval for updating relative times
 let devMode               = false; // Sprint 9: Developer Mode (false = Simple Mode)
 let iframeNoticeDismissed = false; // Sprint 9: show iframe notice only once
+
+// ─── Sprint 11 Pass 10: Image paste state ──────────────────────
+let imageDirHandle        = null;  // FileSystemDirectoryHandle (IndexedDB)
+let currentImagePath      = null;  // filename for image on current note
+let currentImageThumbnail = null;  // base64 JPEG data URL for display
+let pendingImageBuffer    = null;  // ArrayBuffer held when no folder set yet
+let pendingImageFilename  = null;  // filename paired with pendingImageBuffer
 
 // ─── DOM refs ──────────────────────────────────────────────────
 const toggleBtn          = document.getElementById("markup-toggle");
@@ -138,6 +157,10 @@ const exportJsonBtn      = document.getElementById("export-json");
 const exportCsvBtn       = document.getElementById("export-csv");
 const briefSortBtns      = document.querySelectorAll(".brief-sort-btn");
 const briefSortToggleEl  = document.getElementById("brief-sort-toggle");
+const imgLightbox        = document.getElementById("img-lightbox");
+const imgLightboxImg     = document.getElementById("img-lightbox-img");
+const imgLightboxClose   = document.getElementById("img-lightbox-close");
+const briefSortDescEl    = document.getElementById("brief-sort-desc");
 const saveHintEl         = document.querySelector(".save-hint");
 // Sprint 9 new DOM refs
 const devBadgeEl         = document.getElementById("dev-badge");
@@ -147,6 +170,21 @@ const reloadBtn          = document.getElementById("reload-btn");
 const noteTypesRow       = document.querySelector(".note-form__types");
 const noteSeveritiesRow  = document.querySelector(".note-form__severities");
 const escSelectHintEl    = document.getElementById("esc-select-hint");
+// Sprint 11 Pass 5: Simple Mode location field
+const locationInput      = document.getElementById("note-location");
+const locationRow        = document.getElementById("note-location-row");
+// Hide at startup — applyDevMode() will set correct visibility based on stored mode
+if (locationRow) locationRow.hidden = true;
+// Sprint 11 Pass 15: Screenshot button
+const screenshotBtn         = document.getElementById("screenshot-btn");
+// Sprint 11 Pass 10: Image paste DOM refs
+const imageFolderBannerEl   = document.getElementById("image-folder-banner");
+const imageFolderChooseBtn  = document.getElementById("image-folder-choose");
+const imagePreviewWrap      = document.getElementById("image-preview-wrap");
+const imagePreviewThumb     = document.getElementById("image-preview-thumb");
+const imagePreviewRemoveBtn = document.getElementById("image-preview-remove");
+const settingsImagesFolderNameEl = document.getElementById("settings-images-folder-name");
+const settingsChangeFolderBtn    = document.getElementById("settings-change-folder");
 
 // Bug 5: hide selector row at startup — only shown when Markup is ON
 selectorRow.hidden = true;
@@ -190,15 +228,118 @@ async function safeSet(data) {
   }
 }
 
+// ─── Sprint 11 Pass 10: IndexedDB helpers for image folder handle ─
+// chrome.storage.local only supports JSON; FileSystemDirectoryHandle
+// must be stored in IndexedDB which supports structured-clone objects.
+const _IDB_NAME  = "markup_img_db";
+const _IDB_STORE = "handles";
+const _IDB_KEY   = "dir";
+
+function _openImageDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(_IDB_NAME, 1);
+    req.onupgradeneeded = (e) => e.target.result.createObjectStore(_IDB_STORE);
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getStoredImageDirHandle() {
+  try {
+    const db = await _openImageDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(_IDB_STORE, "readonly");
+      const req = tx.objectStore(_IDB_STORE).get(_IDB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror  = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function storeImageDirHandle(handle) {
+  try {
+    const db = await _openImageDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(_IDB_STORE, "readwrite");
+      tx.objectStore(_IDB_STORE).put(handle, _IDB_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => resolve();
+    });
+  } catch { /* ignore */ }
+}
+
+async function loadImageDirHandle() {
+  imageDirHandle = await getStoredImageDirHandle();
+  updateSettingsImagesFolderName();
+}
+
+async function ensureImageDirPermission() {
+  if (!imageDirHandle) return false;
+  try {
+    const perm = await imageDirHandle.queryPermission({ mode: "readwrite" });
+    if (perm === "granted") return true;
+    const req = await imageDirHandle.requestPermission({ mode: "readwrite" });
+    return req === "granted";
+  } catch { return false; }
+}
+
+// ─── Sprint 11 Pass 10: Image utilities ────────────────────────
+async function saveImageToFolder(dirHandle, filename, buffer) {
+  const fh = await dirHandle.getFileHandle(filename, { create: true });
+  const w  = await fh.createWritable();
+  await w.write(buffer);
+  await w.close();
+}
+
+// Returns a full-resolution base64 data URL directly from an ArrayBuffer.
+// No canvas resize — display size is handled by CSS (max-height: 80px, object-fit: cover).
+function readArrayBufferAsDataUrl(arrayBuffer, mimeType) {
+  return new Promise((resolve) => {
+    const blob = new Blob([arrayBuffer], { type: mimeType || "image/png" });
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Reads a saved image file as a base64 data URL for HTML export.
+async function readImageAsBase64(filename) {
+  if (!imageDirHandle || !filename) return null;
+  try {
+    const ok = await ensureImageDirPermission();
+    if (!ok) return null;
+    const fh   = await imageDirHandle.getFileHandle(filename);
+    const file = await fh.getFile();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload  = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  } catch { return null; }
+}
+
+function showImagePreview(dataUrl) {
+  if (!dataUrl || !imagePreviewWrap || !imagePreviewThumb) return;
+  imagePreviewThumb.src = dataUrl;
+  imagePreviewWrap.hidden = false;
+}
+
+function hideImagePreview() {
+  if (imagePreviewWrap) { imagePreviewWrap.hidden = true; }
+  if (imagePreviewThumb) { imagePreviewThumb.src = ""; }
+}
+
+function updateSettingsImagesFolderName() {
+  if (settingsImagesFolderNameEl) {
+    settingsImagesFolderNameEl.textContent = imageDirHandle ? imageDirHandle.name : "No folder set";
+  }
+}
+
 // ─── Sprint 9: Developer Mode ──────────────────────────────────
 function applyDevMode(enabled) {
   devMode = enabled;
-  // Onboarding card: remove when switching to dev, show when switching to simple
-  if (enabled) {
-    document.getElementById("onboarding-card")?.remove();
-  } else {
-    showOnboardingCardIfNeeded();
-  }
   // Mode chip: DEV when dev mode, SIMPLE when simple mode
   if (devBadgeEl) {
     devBadgeEl.textContent = enabled ? "DEV" : "SIMPLE";
@@ -211,12 +352,16 @@ function applyDevMode(enabled) {
   if (noteSeveritiesRow) noteSeveritiesRow.classList.toggle("dev-mode-hidden", !enabled);
   // Filter tabs only visible in Developer Mode
   if (filterTabsEl) filterTabsEl.hidden = !enabled;
+  // Location field visible in both modes
+  if (locationRow) locationRow.hidden = false;
   // Note input placeholder
   if (noteInput) {
     noteInput.placeholder = enabled
       ? "Describe the issue… or speak via Wispr Flow"
       : "What do you notice?";
   }
+  // Hide SELECT ELEMENT toggle in Simple Mode — Dev Mode only control
+  if (toggleBtn) toggleBtn.hidden = !enabled;
   // In simple mode, always hide selector-row regardless.
   if (!enabled) {
     selectorRow.hidden = true;
@@ -254,9 +399,8 @@ async function setDevMode(enabled) {
   applyDevMode(enabled);
 }
 
-// ─── Sprint 10: Onboarding card ─────────────────────────────────
+// ─── Sprint 11 Pass 11: Onboarding card (all installs, both modes) ──
 async function showOnboardingCardIfNeeded() {
-  if (devMode) return;
   const dismissed = await safeGet(ONBOARDING_KEY, false);
   if (dismissed) return;
   if (document.getElementById("onboarding-card")) return; // already shown
@@ -265,14 +409,43 @@ async function showOnboardingCardIfNeeded() {
   card.id = "onboarding-card";
   card.className = "onboarding-card";
   card.innerHTML = `
-    <p class="onboarding-card__text">You're in Simple Mode. For element selection, severity tagging, and structured briefs — enable Dev Mode in settings.</p>
-    <button class="onboarding-card__cta" id="onboarding-cta">OPEN SETTINGS →</button>
+    <button class="onboarding-card__dismiss" id="onboarding-close" aria-label="Dismiss">✕</button>
+    <p class="onboarding-card__text">Welcome to Markup. Select elements, paste screenshots with Cmd+V, and generate a brief when you're done.</p>
+    <div class="onboarding-card__folder-section">
+      <p class="onboarding-card__folder-title">📁 Choose an images folder</p>
+      <p class="onboarding-card__folder-desc">Pick once — all pasted images save there automatically.</p>
+      <button class="onboarding-card__folder-btn" id="onboarding-folder">CHOOSE FOLDER →</button>
+    </div>
+    <button class="onboarding-card__settings-link" id="onboarding-settings">OPEN SETTINGS →</button>
   `;
   notesList.prepend(card);
 
-  document.getElementById("onboarding-cta").addEventListener("click", async () => {
+  async function dismissCard() {
     await safeSet({ [ONBOARDING_KEY]: true });
     card.remove();
+  }
+
+  document.getElementById("onboarding-close").addEventListener("click", () => dismissCard());
+
+  document.getElementById("onboarding-folder").addEventListener("click", async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+      imageDirHandle = handle;
+      await storeImageDirHandle(handle);
+      updateSettingsImagesFolderName();
+      showToast(`Images folder set: ${handle.name}`);
+      await dismissCard();
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.warn("Markup: folder picker failed", err);
+        showToast("Couldn't open folder picker.");
+      }
+      // AbortError = user cancelled — keep card open
+    }
+  });
+
+  document.getElementById("onboarding-settings").addEventListener("click", async () => {
+    await dismissCard();
     showSettings();
     setTimeout(() => { if (devModeToggle) devModeToggle.focus(); }, 100);
   });
@@ -281,6 +454,11 @@ async function showOnboardingCardIfNeeded() {
 // ─── Sprint 9: Toggle state ──────────────────────────────────────
 function setToggleState(active) {
   markupActive = active;
+  // Sprint 11 Pass 15: screenshot button enabled only when markup is ON
+  if (screenshotBtn) {
+    screenshotBtn.disabled = !active;
+    screenshotBtn.setAttribute("aria-disabled", active ? "false" : "true");
+  }
   if (active) {
     toggleBtn.textContent = "STOP SELECTING";
     toggleBtn.classList.add("toggle-btn--on");
@@ -620,9 +798,9 @@ async function writeBackup() {
   console.log(`Markup: backup written (${updated.length}/3 for ${currentNoteUrl})`);
 }
 
-// ─── Global Brief Archive storage ─────────────────────────────
+// ─── Brief archive storage ─────────────────────────────────────
 function loadAllBriefs() {
-  return safeGet(BRIEFS_KEY, []);
+  return safeGet(getBriefsKey(), []);
 }
 
 async function saveBrief(markdown) {
@@ -660,20 +838,20 @@ async function saveBrief(markdown) {
   };
 
   const updated = [...existing, entry].slice(-BRIEFS_MAX);
-  await safeSet({ [BRIEFS_KEY]: updated });
+  await safeSet({ [getBriefsKey()]: updated });
 }
 
 async function deleteBriefEntry(id) {
   const existing = await loadAllBriefs();
   const updated = existing.filter((b) => b.id !== id);
-  await safeSet({ [BRIEFS_KEY]: updated });
+  await safeSet({ [getBriefsKey()]: updated });
   await renderBriefsArchiveList();
 }
 
 async function renameBriefEntry(id, name) {
   const existing = await loadAllBriefs();
   const updated = existing.map((b) => b.id === id ? { ...b, name } : b);
-  await safeSet({ [BRIEFS_KEY]: updated });
+  await safeSet({ [getBriefsKey()]: updated });
 }
 
 // ─── Briefs Archive view ───────────────────────────────────────
@@ -718,10 +896,10 @@ async function renderBriefsArchiveList() {
     empty.className = "briefs-archive__empty";
     const heading = document.createElement("p");
     heading.className = "empty-state__heading";
-    heading.textContent = "No briefs yet.";
+    heading.textContent = "No briefs saved yet.";
     const body = document.createElement("p");
     body.className = "empty-state__body";
-    body.textContent = "Generate your first brief below.";
+    body.textContent = "Generate your first brief to save it here.";
     empty.append(heading, body);
     briefsArchiveList.appendChild(empty);
     return;
@@ -735,9 +913,9 @@ async function renderBriefsArchiveList() {
     // Pass 5: gold dot for most recent
     if (idx === 0) item.classList.add("brief-entry--latest");
 
-    const dateStr = new Date(brief.timestamp).toLocaleDateString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-    });
+    const d = new Date(brief.timestamp);
+    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      + " · " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
     // Severity chips
     const sev = brief.severitySummary || {};
@@ -810,7 +988,7 @@ async function renderBriefsArchiveList() {
   // Pass 5: footer text
   const footer = document.createElement("p");
   footer.className = "briefs-archive__footer";
-  footer.textContent = "Last 10 briefs per URL · Sorted newest first";
+  footer.textContent = "Last 20 briefs · Sorted newest first";
   briefsArchiveList.appendChild(footer);
 }
 
@@ -1027,6 +1205,12 @@ function createNoteCard(note) {
   if (!devMode) {
     // Simple Mode: text + timestamp only, no type/severity badges, no selector
     card.classList.add("note-card--simple");
+    const locationHtml = note.location
+      ? `<p class="note-card__location">${escapeHtml(note.location)}</p>`
+      : "";
+    const imageHtml = note.imageThumbnail
+      ? `<div class="note-card__image-wrap"><img class="note-card__image" src="${note.imageThumbnail}" alt="Screenshot" loading="lazy" /></div>`
+      : "";
     card.innerHTML = `
       <div class="note-card__header">
         <div class="note-card__meta-right">
@@ -1038,21 +1222,31 @@ function createNoteCard(note) {
         </div>
       </div>
       <p class="note-card__text">${escapeHtml(note.text)}</p>
+      ${locationHtml}
+      ${imageHtml}
     `;
   } else {
-    // Developer Mode: full card with type/severity/selector
-    let locationChip = "";
-    if (note.selector) {
-      locationChip = `<code class="selector-chip selector-chip--filled">${escapeHtml(note.selector)}</code>`;
+    // Developer Mode: full card with type/severity/location
+    let locationLine = "";
+    if (note.location) {
+      locationLine = `<p class="note-card__location-label">${escapeHtml(note.location)}</p>`;
+      if (note.selector) {
+        locationLine += `<p class="note-card__selector-ref">Technical ref: <code>${escapeHtml(note.selector)}</code></p>`;
+      }
+    } else if (note.selector) {
+      locationLine = `<code class="selector-chip selector-chip--filled">${escapeHtml(note.selector)}</code>`;
     } else if (note.type === "general") {
-      locationChip = `<span class="general-note-label">General note</span>`;
+      locationLine = `<span class="general-note-label">General note</span>`;
     }
 
-    // Sprint 8 F5: element label row
-    const labelChip = note.elementLabel
+    // Sprint 8 F5: element label row — only when no location override
+    const labelChip = (!note.location && note.elementLabel)
       ? `<span class="note-element-label">${escapeHtml(note.elementLabel)}</span>`
       : "";
 
+    const devImageHtml = note.imageThumbnail
+      ? `<div class="note-card__image-wrap"><img class="note-card__image" src="${note.imageThumbnail}" alt="Screenshot" loading="lazy" /></div>`
+      : "";
     card.innerHTML = `
       <div class="note-card__header">
         <div class="note-card__tags">
@@ -1067,9 +1261,10 @@ function createNoteCard(note) {
           </div>
         </div>
       </div>
-      ${locationChip}
+      ${locationLine}
       ${labelChip}
       <p class="note-card__text">${escapeHtml(note.text)}</p>
+      ${devImageHtml}
     `;
   }
 
@@ -1134,6 +1329,32 @@ function showToast(message) {
   }, 2000);
 }
 
+// ─── Thumbnail lightbox ────────────────────────────────────────
+function openLightbox(src) {
+  imgLightboxImg.src = src;
+  imgLightbox.hidden = false;
+}
+
+function closeLightbox() {
+  imgLightbox.hidden = true;
+  imgLightboxImg.src = "";
+}
+
+imgLightboxClose.addEventListener("click", closeLightbox);
+
+imgLightbox.addEventListener("click", (e) => {
+  if (e.target === imgLightbox) closeLightbox();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !imgLightbox.hidden) closeLightbox();
+});
+
+document.querySelector(".markup-sidebar").addEventListener("click", (e) => {
+  const img = e.target.closest(".note-card__image, .brief-note-image");
+  if (img) openLightbox(img.src);
+});
+
 // ─── Save ──────────────────────────────────────────────────────
 async function flushSave() {
   const text = noteInput.value.trim();
@@ -1144,6 +1365,8 @@ async function flushSave() {
   // Sprint 9 (F1): In simple mode, always use defaults (pickers are hidden)
   const type     = devMode ? getActiveType()     : "general";
   const severity = devMode ? getActiveSeverity() : "medium";
+  // Sprint 11 Pass 11: location field — both modes
+  const location = locationInput ? (locationInput.value.trim() || null) : null;
 
   if (currentNoteId) {
     if (editingNoteUrl && editingNoteUrl !== currentNoteUrl) {
@@ -1155,16 +1378,20 @@ async function flushSave() {
         pushUndo("Edit undone");
         otherNotes[idx] = {
           ...otherNotes[idx],
-          type, severity, text,
+          type, severity, text, location,
           selector: currentSelector,
           elementLabel: currentSelector ? (currentElementLabel || otherNotes[idx].elementLabel) : null,
+          elementRole: currentSelector ? (currentElementRole || otherNotes[idx].elementRole || null) : null,
+          parentContext: currentSelector ? (currentParentContext || otherNotes[idx].parentContext || null) : null,
           elementName: currentSelector ? null : "General note",
+          imagePath:      currentImagePath      || otherNotes[idx].imagePath      || null, // Sprint 11 Pass 10
+          imageThumbnail: currentImageThumbnail || otherNotes[idx].imageThumbnail || null, // Sprint 11 Pass 10
         };
         await safeSet({ [storageKey]: otherNotes });
         // Update in-memory allNotes so re-render reflects the change immediately
         const aNoteIdx = allNotes.findIndex((n) => n.id === currentNoteId);
         if (aNoteIdx >= 0) {
-          allNotes[aNoteIdx] = { ...allNotes[aNoteIdx], type, severity, text, selector: currentSelector };
+          allNotes[aNoteIdx] = { ...allNotes[aNoteIdx], type, severity, text, location, selector: currentSelector };
         }
       }
       renderNotesList();
@@ -1178,9 +1405,14 @@ async function flushSave() {
         type,
         severity,
         text,
+        location,
         selector: currentSelector,
         elementLabel: currentSelector ? (currentElementLabel || notes[idx].elementLabel) : null,
+        elementRole: currentSelector ? (currentElementRole || notes[idx].elementRole || null) : null,
+        parentContext: currentSelector ? (currentParentContext || notes[idx].parentContext || null) : null,
         elementName: currentSelector ? null : "General note",
+        imagePath:      currentImagePath      || notes[idx].imagePath      || null, // Sprint 11 Pass 10
+        imageThumbnail: currentImageThumbnail || notes[idx].imageThumbnail || null, // Sprint 11 Pass 10
       };
     }
   } else {
@@ -1189,10 +1421,15 @@ async function flushSave() {
       url: currentNoteUrl,
       selector: currentSelector,
       elementLabel: currentSelector ? currentElementLabel : null, // Sprint 8 F5
+      elementRole: currentSelector ? (currentElementRole || null) : null,  // Sprint 11 Pass 8
+      parentContext: currentSelector ? (currentParentContext || null) : null, // Sprint 11 Pass 8
       elementName: currentSelector ? null : "General note",
       type,
       severity,
       text,
+      location,         // Sprint 11 Pass 5: optional location string (Simple Mode only)
+      imagePath:      currentImagePath      || null, // Sprint 11 Pass 10
+      imageThumbnail: currentImageThumbnail || null, // Sprint 11 Pass 10
       createdAt: Date.now(), // Sprint 8 F7
     };
     currentNoteId = note.id;
@@ -1207,21 +1444,33 @@ async function flushSave() {
 function resetForm() {
   currentSelector     = null;
   currentElementLabel = null;
+  currentParentContext = null;
+  currentElementRole  = null;
   currentNoteId       = null;
   isEditing           = false;
   editPrevSelector    = null;
   noteInput.value     = "";
+  if (locationInput) locationInput.value = "";
   selectorRow.hidden  = true;
   selectorDisplay.textContent = "";
   saveBtn.textContent = "SAVE NOTE";
   resetTypePicker();
   resetSeverityPicker();
   updateClearSelectorVisibility();
+  // Sprint 11 Pass 10: clear image state
+  currentImagePath      = null;
+  currentImageThumbnail = null;
+  pendingImageBuffer    = null;
+  pendingImageFilename  = null;
+  hideImagePreview();
+  if (imageFolderBannerEl) imageFolderBannerEl.hidden = true;
 }
 
 function deactivateReset() {
   currentSelector     = null;
   currentElementLabel = null;
+  currentParentContext = null;
+  currentElementRole  = null;
   currentNoteId       = null;
   isEditing           = false;
   editPrevSelector    = null;
@@ -1230,14 +1479,29 @@ function deactivateReset() {
   saveBtn.textContent = "SAVE NOTE";
   // Intentionally NOT resetting type/severity pickers — user's choice is preserved across deactivation.
   updateClearSelectorVisibility();
+  // Sprint 11 Pass 10: clear image state (preserve pending image across deactivation)
+  currentImagePath      = null;
+  currentImageThumbnail = null;
+  pendingImageBuffer    = null;
+  pendingImageFilename  = null;
+  hideImagePreview();
+  if (imageFolderBannerEl) imageFolderBannerEl.hidden = true;
 }
 
 function softReset() {
   currentNoteId       = null;
   currentElementLabel = null;
   noteInput.value     = "";
+  if (locationInput) locationInput.value = "";
   resetTypePicker();
   resetSeverityPicker();
+  // Sprint 11 Pass 10: clear image state
+  currentImagePath      = null;
+  currentImageThumbnail = null;
+  pendingImageBuffer    = null;
+  pendingImageFilename  = null;
+  hideImagePreview();
+  if (imageFolderBannerEl) imageFolderBannerEl.hidden = true;
   noteInput.focus();
 }
 
@@ -1247,9 +1511,12 @@ function enterEditMode(note) {
   editPrevSelector = currentSelector;
   currentNoteId    = note.id;
   editingNoteUrl   = note.url || currentNoteUrl; // Pass 7: track which URL this note belongs to
-  currentSelector  = note.selector;
-  currentElementLabel = note.elementLabel || null;
-  noteInput.value  = note.text;
+  currentSelector      = note.selector;
+  currentElementLabel  = note.elementLabel  || null;
+  currentParentContext = note.parentContext  || null;
+  currentElementRole   = note.elementRole   || null;
+  noteInput.value      = note.text;
+  if (locationInput) locationInput.value = note.location || "";
   setTypePicker(note.type);
   setSeverityPicker(note.severity || "medium");
   // Sprint 9 (F1): only show selector row in dev mode
@@ -1262,6 +1529,11 @@ function enterEditMode(note) {
   saveBtn.textContent = "UPDATE NOTE";
   if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to update · Esc to cancel";
   updateClearSelectorVisibility();
+  // Sprint 11 Pass 10: restore image state from note
+  currentImagePath      = note.imagePath      || null;
+  currentImageThumbnail = note.imageThumbnail || null;
+  if (currentImageThumbnail) showImagePreview(currentImageThumbnail);
+  else hideImagePreview();
   // Dim other cards, mark active card
   const notesList = document.getElementById("notes-list");
   if (notesList) notesList.classList.add("is-editing-mode");
@@ -1277,16 +1549,26 @@ function exitEditMode() {
   isEditing        = false;
   currentNoteId    = null;
   editingNoteUrl   = null; // Pass 7
-  currentSelector  = editPrevSelector;
-  currentElementLabel = null;
-  editPrevSelector = null;
+  currentSelector      = editPrevSelector;
+  currentElementLabel  = null;
+  currentParentContext = null;
+  currentElementRole   = null;
+  editPrevSelector     = null;
   noteInput.value  = "";
+  if (locationInput) locationInput.value = "";
   resetTypePicker();
   resetSeverityPicker();
   saveBtn.textContent = "SAVE NOTE";
   selectorDisplay.textContent = currentSelector || "Hover to preview element";
   if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to save";
   updateClearSelectorVisibility();
+  // Sprint 11 Pass 10: clear image state on exit edit
+  currentImagePath      = null;
+  currentImageThumbnail = null;
+  pendingImageBuffer    = null;
+  pendingImageFilename  = null;
+  hideImagePreview();
+  if (imageFolderBannerEl) imageFolderBannerEl.hidden = true;
   // Restore card opacity
   const notesList = document.getElementById("notes-list");
   if (notesList) notesList.classList.remove("is-editing-mode");
@@ -1340,6 +1622,19 @@ noteInput.addEventListener("keydown", (e) => {
   }
 });
 
+// Cmd+Enter / Ctrl+Enter from location field also saves
+if (locationInput) {
+  locationInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      flushSave().then(() => {
+        if (isEditing) exitEditMode();
+        else softReset();
+      });
+    }
+  });
+}
+
 document.addEventListener("keydown", (e) => {
   if (document.activeElement === noteInput) return;
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z") {
@@ -1366,12 +1661,127 @@ clearSelectorBtn.addEventListener("click", async () => {
     ignoreNextDeselect = true;
     chrome.tabs.sendMessage(tab.id, { type: "MARKUP_DESELECT" });
   }
-  currentSelector = null;
-  currentElementLabel = null;
+  currentSelector      = null;
+  currentElementLabel  = null;
+  currentParentContext = null;
+  currentElementRole   = null;
   selectorDisplay.textContent = "Hover to preview element";
   selectorDisplay.className = "selector-chip selector-chip--empty"; // Sprint 9 (2i)
   updateClearSelectorVisibility();
 });
+
+// ─── Sprint 11 Pass 10: Image paste ────────────────────────────
+noteInput.addEventListener("paste", async (e) => {
+  const files = Array.from(e.clipboardData?.files || []);
+  const imageFile = files.find((f) => f.type.startsWith("image/"));
+  if (!imageFile) return; // no image — let normal text paste proceed
+
+  e.preventDefault(); // suppress binary data being inserted as text
+
+  const arrayBuffer = await imageFile.arrayBuffer();
+  let hostname = "markup";
+  try { hostname = new URL(currentNoteUrl).hostname.replace(/[^a-z0-9-]/gi, "-") || "markup"; } catch { /* */ }
+  const filename = `markup-${hostname}-${Date.now()}.png`;
+
+  // Read full-resolution data URL directly — no canvas resize (task 1: image quality)
+  const thumbUrl = await readArrayBufferAsDataUrl(arrayBuffer, imageFile.type);
+  currentImageThumbnail = thumbUrl;
+
+  if (!imageDirHandle) {
+    // Hold in memory; show folder picker banner and preview
+    pendingImageBuffer   = arrayBuffer;
+    pendingImageFilename = filename;
+    if (imageFolderBannerEl) imageFolderBannerEl.hidden = false;
+    showImagePreview(thumbUrl);
+    return;
+  }
+
+  const ok = await ensureImageDirPermission();
+  if (!ok) {
+    showToast("Image not saved — folder permission denied.");
+    return;
+  }
+  try {
+    await saveImageToFolder(imageDirHandle, filename, arrayBuffer);
+    currentImagePath = filename;
+    showImagePreview(thumbUrl);
+  } catch (err) {
+    console.error("Markup: image save failed", err);
+    showToast("Image save failed.");
+  }
+});
+
+// Folder chooser — CHOOSE FOLDER → button on banner
+if (imageFolderChooseBtn) {
+  imageFolderChooseBtn.addEventListener("click", async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+      imageDirHandle = handle;
+      await storeImageDirHandle(handle);
+      if (imageFolderBannerEl) imageFolderBannerEl.hidden = true;
+      updateSettingsImagesFolderName();
+
+      // Save pending image now that folder is available
+      if (pendingImageBuffer && pendingImageFilename) {
+        const ok = await ensureImageDirPermission();
+        if (ok) {
+          try {
+            await saveImageToFolder(handle, pendingImageFilename, pendingImageBuffer);
+            currentImagePath = pendingImageFilename;
+            showImagePreview(currentImageThumbnail);
+          } catch (err) {
+            console.error("Markup: pending image save failed", err);
+          }
+        }
+        pendingImageBuffer   = null;
+        pendingImageFilename = null;
+      }
+    } catch { /* user cancelled picker */ }
+  });
+}
+
+// Settings: change folder button
+if (settingsChangeFolderBtn) {
+  settingsChangeFolderBtn.addEventListener("click", async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+      imageDirHandle = handle;
+      await storeImageDirHandle(handle);
+      updateSettingsImagesFolderName();
+      showToast("Images folder updated.");
+    } catch { /* user cancelled */ }
+  });
+}
+
+// ─── Sprint 11 Pass 15: Screenshot capture ────────────────────
+// Helper: data URL → ArrayBuffer (for disk storage)
+function dataUrlToArrayBuffer(dataUrl) {
+  const base64 = dataUrl.split(",")[1];
+  const binary = atob(base64);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes  = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return buffer;
+}
+
+// Screenshot button: send ENTER_SCREENSHOT_MODE to content script
+if (screenshotBtn) {
+  screenshotBtn.addEventListener("click", async () => {
+    if (!markupActive || !currentTabId) return;
+    chrome.tabs.sendMessage(currentTabId, { type: "ENTER_SCREENSHOT_MODE" }).catch(() => {});
+  });
+}
+
+// Remove image preview × button
+if (imagePreviewRemoveBtn) {
+  imagePreviewRemoveBtn.addEventListener("click", () => {
+    currentImagePath      = null;
+    currentImageThumbnail = null;
+    pendingImageBuffer    = null;
+    pendingImageFilename  = null;
+    hideImagePreview();
+  });
+}
 
 // ─── Clear all ─────────────────────────────────────────────────
 if (clearAllBtn) {
@@ -1400,20 +1810,29 @@ clearConfirmNoBtn.addEventListener("click", () => {
 // ─── Note pending prompt ───────────────────────────────────────
 notePendingSaveBtn.addEventListener("click", async () => {
   notePendingPrompt.hidden = true;
-  const sel   = pendingElementSelector;
-  const label = pendingElementLabel;
+  const sel         = pendingElementSelector;
+  const label       = pendingElementLabel;
+  const parentCtx   = pendingParentContext;
+  const elemRole    = pendingElementRole;
   pendingElementSelector = null;
   pendingElementLabel    = null;
+  pendingParentContext   = null;
+  pendingElementRole     = null;
   await flushSave();
   softReset();
   if (sel) {
-    currentSelector     = sel;
-    currentElementLabel = label;
-    currentNoteId       = null;
+    currentSelector      = sel;
+    currentElementLabel  = label;
+    currentParentContext = parentCtx;
+    currentElementRole   = elemRole;
+    currentNoteId        = null;
     if (devMode) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = sel;
       selectorDisplay.className = "selector-chip selector-chip--filled";
+    }
+    if (locationInput && !locationInput.value.trim()) {
+      locationInput.value = devMode ? (sel || "") : (label || "");
     }
     updateClearSelectorVisibility();
     noteInput.focus();
@@ -1422,21 +1841,30 @@ notePendingSaveBtn.addEventListener("click", async () => {
 
 notePendingDiscardBtn.addEventListener("click", () => {
   notePendingPrompt.hidden = true;
-  const sel   = pendingElementSelector;
-  const label = pendingElementLabel;
+  const sel       = pendingElementSelector;
+  const label     = pendingElementLabel;
+  const parentCtx = pendingParentContext;
+  const elemRole  = pendingElementRole;
   pendingElementSelector = null;
   pendingElementLabel    = null;
+  pendingParentContext   = null;
+  pendingElementRole     = null;
   noteInput.value = "";
   resetTypePicker();
   resetSeverityPicker();
   currentNoteId = null;
   if (sel) {
-    currentSelector     = sel;
-    currentElementLabel = label;
+    currentSelector      = sel;
+    currentElementLabel  = label;
+    currentParentContext = parentCtx;
+    currentElementRole   = elemRole;
     if (devMode) {
       selectorRow.hidden = false;
       selectorDisplay.textContent = sel;
       selectorDisplay.className = "selector-chip selector-chip--filled";
+    }
+    if (locationInput && !locationInput.value.trim()) {
+      locationInput.value = devMode ? (sel || "") : (label || "");
     }
     updateClearSelectorVisibility();
     noteInput.focus();
@@ -1464,7 +1892,7 @@ function buildSimpleBriefText() {
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
 
   const lines = [
-    `# Markup — Feedback`,
+    `# ${getBriefTitle()}`,
     ``,
     `**Project:** ${project}`,
     `**Domain:** ${domainName}`,
@@ -1482,7 +1910,10 @@ function buildSimpleBriefText() {
     const sorted = [...group.notes].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     sorted.forEach((note, i) => {
       if (i > 0) lines.push(``);
+      const label = note.location || note.elementLabel || null;
+      if (label) lines.push(label);
       lines.push(note.text);
+      if (note.imagePath) lines.push(`[image: ${note.imagePath}]`); // Sprint 11 Pass 10
     });
     lines.push(``);
     lines.push(`---`);
@@ -1521,7 +1952,7 @@ function buildBriefText() {
     .join(" · ");
 
   const lines = [
-    `# Markup — Fix Instructions`,
+    `# ${getBriefTitle()}`,
     ``,
     `**Project:** ${project}`,
     `**Domain:** ${domainName}`,
@@ -1535,18 +1966,31 @@ function buildBriefText() {
 
   function appendNotesGroup(notesArr, headingLevel) {
     const h = "#".repeat(headingLevel);
+    function formatNoteEntry(note) {
+      const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
+      const sev     = note.severity || "medium";
+      const sevCfg  = SEVERITY_CONFIG[sev];
+      // Build chip line: [location | role | TYPE | SEVERITY]
+      const chipParts = [];
+      if (note.location) chipParts.push(note.location);
+      else if (note.selector) chipParts.push(note.selector);
+      if (note.elementRole) chipParts.push(note.elementRole);
+      chipParts.push(typeCfg.label.toUpperCase());
+      chipParts.push(sevCfg.label.toUpperCase());
+      lines.push(`[${chipParts.join(" | ")}]`);
+      // Technical ref: raw selector as secondary line when location field is used
+      if (note.location && note.selector) lines.push(`Technical ref: \`${note.selector}\``);
+      if (note.elementLabel) lines.push(`element: "${note.elementLabel}"`);
+      if (note.parentContext) lines.push(`↳ inside [${note.parentContext}]`);
+      lines.push(note.text);
+      if (note.imagePath) lines.push(`[image: ${note.imagePath}]`); // Sprint 11 Pass 10
+    }
     if (briefSortMode === "chronological") {
       lines.push(``);
       const sorted = [...notesArr].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       sorted.forEach((note, i) => {
         if (i > 0) lines.push(``);
-        const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-        const sev     = note.severity || "medium";
-        const sevCfg  = SEVERITY_CONFIG[sev];
-        const label   = note.elementLabel || note.elementName || note.selector || "No element selected";
-        lines.push(`**[${typeCfg.label} · ${sevCfg.label}]** ${label}`);
-        if (note.selector) lines.push(`**Selector:** ${note.selector}`);
-        lines.push(`**${typeCfg.field}:** ${note.text}`);
+        formatNoteEntry(note);
       });
       lines.push(``);
       lines.push(`---`);
@@ -1562,11 +2006,7 @@ function buildBriefText() {
         );
         sorted.forEach((note, i) => {
           if (i > 0) lines.push(``);
-          const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-          const label = note.elementLabel || note.elementName || note.selector || "No element selected";
-          lines.push(`**[${typeCfg.label}]** ${label}`);
-          if (note.selector) lines.push(`**Selector:** ${note.selector}`);
-          lines.push(`**${typeCfg.field}:** ${note.text}`);
+          formatNoteEntry(note);
         });
         lines.push(``);
         lines.push(`---`);
@@ -1594,11 +2034,28 @@ function renderBriefEntryHtml(note) {
   html += `<div class="brief-entry-chips">`;
   html += `<span class="brief-severity-chip brief-severity-chip--${escapeHtml(sev)}">${escapeHtml(sevCfg.label)}</span>`;
   html += `<span class="brief-type-chip">${escapeHtml(typeCfg.label)}</span>`;
+  if (note.elementRole) {
+    html += `<span class="brief-role-chip">${escapeHtml(note.elementRole)}</span>`;
+  }
   html += `</div>`;
-  if (note.selector) {
+  if (note.location) {
+    html += `<p class="brief-location-label">${escapeHtml(note.location)}</p>`;
+    if (note.selector) {
+      html += `<p class="brief-selector-ref">Technical ref: <code>${escapeHtml(note.selector)}</code></p>`;
+    }
+  } else if (note.selector) {
     html += `<code class="brief-selector-text">${escapeHtml(note.selector)}</code>`;
   }
+  if (note.elementLabel) {
+    html += `<p class="brief-element-label"><span class="brief-element-label__key">element:</span> &ldquo;${escapeHtml(note.elementLabel)}&rdquo;</p>`;
+  }
+  if (note.parentContext) {
+    html += `<p class="brief-parent-context">↳ inside ${escapeHtml(note.parentContext)}</p>`;
+  }
   html += `<p class="brief-note-body">${escapeHtml(note.text)}</p>`;
+  if (note.imageThumbnail) { // Sprint 11 Pass 10
+    html += `<img class="brief-note-image" src="${note.imageThumbnail}" alt="Screenshot" loading="lazy" />`;
+  }
   html += `</div>`;
   return html;
 }
@@ -1627,7 +2084,7 @@ function buildBriefPanelHtml() {
   }
   const sevSummary = SEVERITY_ORDER.map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`).join(" · ");
 
-  let html = `<h1>Markup — Fix Instructions</h1>`;
+  let html = `<h1>${escapeHtml(getBriefTitle())}</h1>`;
   html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
   html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
   html += `<p class="brief-meta-line"><strong>Reviewed:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
@@ -1678,7 +2135,7 @@ function buildSimpleBriefPanelHtml() {
   let domainName = currentNoteUrl;
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
 
-  let html = `<h1>Markup — Feedback</h1>`;
+  let html = `<h1>${escapeHtml(getBriefTitle())}</h1>`;
   html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
   html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
   html += `<p class="brief-meta-line"><strong>Date:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
@@ -1687,12 +2144,15 @@ function buildSimpleBriefPanelHtml() {
 
   function renderSimpleEntries(notesArr) {
     notesArr.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach((note) => {
-      const tsStr = note.createdAt
-        ? new Date(note.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-        : "";
+      const label = note.location || note.elementLabel || null;
       html += `<div class="brief-simple-entry">`;
-      if (tsStr) html += `<p class="brief-simple-ts">${escapeHtml(tsStr)}</p>`;
+      if (label) {
+        html += `<p class="brief-simple-location">${escapeHtml(label)}</p>`;
+      }
       html += `<p class="brief-note-body">${escapeHtml(note.text)}</p>`;
+      if (note.imageThumbnail) { // Sprint 11 Pass 10
+        html += `<img class="brief-note-image" src="${note.imageThumbnail}" alt="Screenshot" loading="lazy" />`;
+      }
       html += `</div>`;
     });
   }
@@ -1723,13 +2183,13 @@ async function showBrief() {
   briefGenerating.hidden = false;
   briefPanel.hidden = false;
 
-  setTimeout(async () => {
+  setTimeout(() => {
     const briefText = buildBriefText();
     currentBriefText = briefText;
     briefContent.innerHTML = buildBriefPanelHtml();
     briefGenerating.hidden = true;
     briefContent.hidden = false;
-    await saveBrief(briefText); // Sprint 8 F1: persist to history
+    saveBrief(briefText); // Sprint 11: fire-and-forget after render
   }, 400);
 }
 
@@ -1767,27 +2227,72 @@ copyBriefBtn.addEventListener("click", async () => {
   }
 });
 
-// ─── Download .zip (Sprint 10 stub — JSZip not available) ─────
-// When JSZip is added, replace this stub with real zip generation:
-//   brief.md + /images/ folder with all screenshots.
-downloadZipBtn.addEventListener("click", () => {
-  console.log("Markup: ZIP not yet implemented — JSZip not available. Falling back to .md download.");
-  const text = currentBriefText;
+// ─── Download .zip — JSZip (Sprint 11 Pass 11) ────────────────
+downloadZipBtn.addEventListener("click", async () => {
   const dateStr = new Date().toISOString().slice(0, 10);
   let domain = currentTabUrl;
   try { domain = new URL(currentTabUrl).hostname; } catch { /* use full url */ }
-  const blob = new Blob([text], { type: "text/markdown" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `markup-brief-${domain}-${dateStr}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const filename = `markup-brief-${domain}-${dateStr}`;
+
+  function fallbackMd() {
+    const blob = new Blob([currentBriefText], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (typeof JSZip === "undefined") {
+    console.warn("Markup: JSZip not loaded — falling back to .md download.");
+    fallbackMd();
+    return;
+  }
+
+  try {
+    const zip = new JSZip();
+    let md = currentBriefText;
+
+    // Collect notes that have images
+    const notesWithImages = briefDomainGroups.flatMap((g) => g.notes).filter((n) => n.imagePath);
+
+    if (notesWithImages.length > 0 && imageDirHandle) {
+      const ok = await ensureImageDirPermission();
+      if (ok) {
+        const imgFolder = zip.folder("images");
+        for (const note of notesWithImages) {
+          try {
+            const fh   = await imageDirHandle.getFileHandle(note.imagePath);
+            const file = await fh.getFile();
+            const buf  = await file.arrayBuffer();
+            imgFolder.file(note.imagePath, buf);
+            // Replace plain-text image ref in markdown with relative path
+            md = md.split(`[image: ${note.imagePath}]`).join(`![image](images/${note.imagePath})`);
+          } catch { /* skip missing files */ }
+        }
+      }
+    }
+
+    zip.file("brief.md", md);
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("ZIP exported.");
+  } catch (err) {
+    console.warn("Markup: ZIP generation failed", err);
+    fallbackMd();
+    showToast("ZIP failed — exported as .md.");
+  }
 });
 
 // ─── Export as HTML report (Sprint 10) ────────────────────────
 // Pass 8: domain-wide — uses briefDomainGroups collected by showBrief()
-downloadHtmlBtn.addEventListener("click", () => {
+downloadHtmlBtn.addEventListener("click", async () => {
   const dateStr = new Date().toISOString().slice(0, 10);
   let domain = currentNoteUrl;
   try { domain = new URL(currentNoteUrl).hostname; } catch { /* use full url */ }
@@ -1797,14 +2302,28 @@ downloadHtmlBtn.addEventListener("click", () => {
   const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
   const isMultiUrl = briefDomainGroups.length > 1;
 
+  // Sprint 11 Pass 10: pre-load all images from folder as base64 for inline embedding
+  const imageMap = {}; // filename → data URL
+  if (imageDirHandle) {
+    const allNotes2 = briefDomainGroups.flatMap((g) => g.notes);
+    await Promise.all(allNotes2.map(async (note) => {
+      if (note.imagePath && !imageMap[note.imagePath]) {
+        try { imageMap[note.imagePath] = await readImageAsBase64(note.imagePath); } catch { /* skip */ }
+      }
+    }));
+  }
+
   function buildNoteEntryHtml(note, sev) {
     const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
     const selectorLine = note.selector
       ? `<div class="note-selector">${escapeHtml(note.selector)}</div>` : "";
     const typeChip = `<span class="type-chip">${escapeHtml(typeCfg.label)}</span>`;
+    const imgSrc = note.imagePath ? (imageMap[note.imagePath] || note.imageThumbnail || null) : (note.imageThumbnail || null);
+    const imgHtml = imgSrc ? `<img class="note-image" src="${imgSrc}" alt="Screenshot" />` : "";
     return `      <div class="note-entry ${escapeHtml(sev)}">
         ${selectorLine}${typeChip}
         <div class="note-body">${escapeHtml(note.text)}</div>
+        ${imgHtml}
       </div>`;
   }
 
@@ -1825,9 +2344,13 @@ downloadHtmlBtn.addEventListener("click", () => {
       const tsStr = note.createdAt
         ? new Date(note.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
         : "";
+      const imgSrc2 = note.imagePath ? (imageMap[note.imagePath] || note.imageThumbnail || null) : (note.imageThumbnail || null);
+      const imgHtml2 = imgSrc2 ? `<img class="note-image" src="${imgSrc2}" alt="Screenshot" />` : "";
       return `    <div class="note-entry-simple">
       ${tsStr ? `<div class="simple-ts">${escapeHtml(tsStr)}</div>` : ""}
       <div class="note-body">${escapeHtml(note.text)}</div>
+      ${note.location ? `<div class="simple-location">${escapeHtml(note.location)}</div>` : ""}
+      ${imgHtml2}
     </div>`;
     }).join("\n");
   }
@@ -1976,6 +2499,12 @@ downloadHtmlBtn.addEventListener("click", () => {
       color: #6B7A99;
       margin-bottom: 6px;
     }
+    .simple-location {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #6B7A99;
+      margin-top: 6px;
+    }
     .url-section-header {
       font-size: 14px;
       font-weight: 700;
@@ -1994,6 +2523,14 @@ downloadHtmlBtn.addEventListener("click", () => {
       color: #C9A84C;
       letter-spacing: -0.01em;
       margin-bottom: 10px;
+    }
+    .note-image {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin-top: 12px;
     }
     .report-footer {
       margin-top: 48px;
@@ -2083,10 +2620,29 @@ async function loadSettingsPanel() {
 
   // Sprint 9 (F1): Sync developer mode toggle to current state
   if (devModeToggle) devModeToggle.checked = devMode;
+
+  // Sprint 11 Pass 10: sync images folder name
+  updateSettingsImagesFolderName();
 }
 
 settingsBtn.addEventListener("click", showSettings);
 closeSettingsBtn.addEventListener("click", hideSettings);
+
+// ─── Voice notes hint → settings highlight ─────────────────────
+const voiceNotesLinkEl = document.getElementById("voice-notes-settings-link");
+if (voiceNotesLinkEl) {
+  voiceNotesLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    showSettings();
+    setTimeout(() => {
+      const voiceSection = document.querySelector(".settings-section--voice");
+      if (!voiceSection) return;
+      voiceSection.scrollIntoView({ behavior: "smooth", block: "center" });
+      voiceSection.classList.add("settings-section--highlight");
+      setTimeout(() => voiceSection.classList.remove("settings-section--highlight"), 2500);
+    }, 150);
+  });
+}
 
 // Sprint 9 (F1): Developer Mode toggle
 if (devModeToggle) {
@@ -2110,11 +2666,19 @@ if (reloadBtn) {
 }
 
 // Brief sort pill toggle
+function updateBriefSortDesc() {
+  if (!briefSortDescEl) return;
+  briefSortDescEl.textContent = briefSortMode === "chronological"
+    ? "Notes in the order they were captured"
+    : "Notes grouped Critical → High → Medium → Low";
+}
+
 briefSortBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
     briefSortMode = btn.dataset.sort;
     chrome.storage.local.set({ markup_brief_sort: briefSortMode });
     briefSortBtns.forEach((b) => b.classList.toggle("brief-sort-btn--active", b.dataset.sort === briefSortMode));
+    updateBriefSortDesc();
   });
 });
 
@@ -2223,13 +2787,21 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "ELEMENT_SELECTED") {
     if (noteInput.value.trim() && !currentNoteId && !isEditing) {
       pendingElementSelector = message.selector;
-      pendingElementLabel    = message.elementLabel || null;
+      pendingElementLabel    = message.elementLabel  || null;
+      pendingParentContext   = message.parentContext  || null;
+      pendingElementRole     = message.elementRole   || null;
       notePendingPrompt.hidden = false;
       return;
     }
     // Update selector only — no auto-save, preserve unsaved text and edit state
-    currentSelector     = message.selector;
-    currentElementLabel = message.elementLabel || null;
+    currentSelector      = message.selector;
+    currentElementLabel  = message.elementLabel  || null;
+    currentParentContext = message.parentContext  || null;
+    currentElementRole   = message.elementRole   || null;
+    // Pass 11: pre-populate location field in both modes if not already set by user
+    if (locationInput && !locationInput.value.trim()) {
+      locationInput.value = devMode ? (currentSelector || "") : (currentElementLabel || "");
+    }
     // Sprint 9 (F1 + 2i): only show selector chip in dev mode; add filled class
     if (devMode) {
       selectorRow.hidden  = false;
@@ -2249,8 +2821,10 @@ chrome.runtime.onMessage.addListener((message) => {
       return;
     }
     // Clear selector only — no auto-save, preserve noteInput, type/severity pickers, and edit state.
-    currentSelector     = null;
-    currentElementLabel = null;
+    currentSelector      = null;
+    currentElementLabel  = null;
+    currentParentContext = null;
+    currentElementRole   = null;
     selectorDisplay.textContent = "Hover to preview element";
     selectorDisplay.className = "selector-chip selector-chip--empty";
     updateClearSelectorVisibility();
@@ -2301,6 +2875,66 @@ chrome.runtime.onMessage.addListener((message) => {
       card.classList.add("note-card--highlighted");
       setTimeout(() => card.classList.remove("note-card--highlighted"), 1200);
     }
+  }
+
+  // Sprint 11 Pass 15: screenshot region selected — capture viewport, crop, store as image
+  if (message.type === "SCREENSHOT_REGION_SELECTED") {
+    const { rect } = message;
+    (async () => {
+      try {
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: "CAPTURE_SCREENSHOT" }, (r) => resolve(r));
+        });
+        if (!response?.dataUrl) { showToast("Screenshot capture failed."); return; }
+
+        // Crop to rect using canvas; rect is in CSS pixels, captureVisibleTab is at native resolution
+        const dpr = rect.dpr || 1;
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement("canvas");
+          canvas.width  = Math.round(rect.width  * dpr);
+          canvas.height = Math.round(rect.height * dpr);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(
+            img,
+            Math.round(rect.x * dpr), Math.round(rect.y * dpr),
+            Math.round(rect.width * dpr), Math.round(rect.height * dpr),
+            0, 0,
+            Math.round(rect.width * dpr), Math.round(rect.height * dpr)
+          );
+          const dataUrl = canvas.toDataURL("image/png");
+
+          let hostname = "markup";
+          try { hostname = new URL(currentNoteUrl).hostname.replace(/[^a-z0-9-]/gi, "-") || "markup"; } catch { /* */ }
+          const filename = `markup-${hostname}-${Date.now()}.png`;
+
+          currentImageThumbnail = dataUrl;
+
+          if (!imageDirHandle) {
+            pendingImageBuffer   = dataUrlToArrayBuffer(dataUrl);
+            pendingImageFilename = filename;
+            if (imageFolderBannerEl) imageFolderBannerEl.hidden = false;
+          } else {
+            const ok = await ensureImageDirPermission();
+            if (ok) {
+              try {
+                await saveImageToFolder(imageDirHandle, filename, dataUrlToArrayBuffer(dataUrl));
+                currentImagePath = filename;
+              } catch (err) {
+                console.error("Markup: screenshot save failed", err);
+              }
+            }
+          }
+
+          showImagePreview(dataUrl);
+          setTimeout(() => noteInput.focus(), 50);
+        };
+        img.src = response.dataUrl;
+      } catch (err) {
+        console.error("Markup: screenshot error", err);
+        showToast("Screenshot failed.");
+      }
+    })();
   }
 });
 
@@ -2370,6 +3004,9 @@ async function init() {
   // Sprint 9 (F1): Load dev mode before rendering anything
   await loadDevMode();
 
+  // Sprint 11 Pass 10: load image folder handle from IndexedDB
+  await loadImageDirHandle();
+
   // Sprint 10: Show onboarding card for new Simple Mode installs
   await showOnboardingCardIfNeeded();
 
@@ -2378,6 +3015,7 @@ async function init() {
     const stored = await safeGet("markup_brief_sort", "severity");
     briefSortMode = stored;
     briefSortBtns.forEach((b) => b.classList.toggle("brief-sort-btn--active", b.dataset.sort === briefSortMode));
+    updateBriefSortDesc();
   } catch { /* */ }
 
   // Sprint 8 F7: start timestamp refresh interval
@@ -2411,6 +3049,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
   pendingElementSelector = null;
   pendingElementLabel    = null;
+  pendingParentContext   = null;
+  pendingElementRole     = null;
   notePendingPrompt.hidden = true;
   ignoreNextDeselect = false;
 
