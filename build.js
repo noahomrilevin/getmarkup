@@ -33,6 +33,8 @@ async function run() {
   }
   cpSync(join(SRC, "sidebar"), join(DIST, "sidebar"), { recursive: true });
   cpSync(join(SRC, "fonts"), join(DIST, "fonts"), { recursive: true });
+  // Copy JSZip for use in sidebar (loaded as a plain script, not bundled)
+  cpSync(join(__dirname, "node_modules", "jszip", "dist", "jszip.min.js"), join(DIST, "sidebar", "jszip.min.js"));
 
   console.log("Markup: build complete → dist/");
 }

@@ -597,6 +597,7 @@ html, body {
   gap: var(--space-xs);
   flex-wrap: wrap;
   overflow: visible; /* let tooltips escape the row */
+  margin-bottom: 6px;
 }
 
 .note-form__input {
@@ -1474,6 +1475,7 @@ html, body {
   gap: var(--space-xs);
   flex-wrap: wrap;
   overflow: visible;
+  margin-bottom: 6px;
 }
 
 .severity-btn {
@@ -1640,10 +1642,16 @@ html, body {
   flex-wrap: nowrap;
 }
 .bottom-btn-row--simple .bottom-select-group {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .bottom-btn-row--simple .btn-primary {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.bottom-btn-row--simple .btn-screenshot {
+  width: 100%;
+  white-space: nowrap;
 }
 
 /* ─── Select group: SCREENSHOT + SELECT ELEMENT ───────────────── */
@@ -1688,6 +1696,12 @@ html, body {
   cursor: not-allowed;
 }
 
+.btn-screenshot--active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.1);
+}
+
 .markup-toggle-section .toggle-btn {
   text-align: center;
 }
@@ -1709,7 +1723,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: var(--space-xs);
+  margin-top: 8px;
 }
 
 .save-row .btn-save {
@@ -2230,7 +2244,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 8px;
+  padding: 5px 0;
+  margin-bottom: 6px;
 }
 
 .brief-sort-btn {
@@ -2789,34 +2804,33 @@ a:focus-visible {
   margin: 0;
 }
 
-/* ─── Developer Mode / Simple Mode badge (1) ────────────────────── */
-.dev-badge {
+/* ─── Mode chip (toggles dev/simple mode) ────────────────────── */
+.mode-chip {
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  background: transparent;
   font-family: var(--font-body);
   font-size: 10px;
-  font-weight: 500;
-  color: var(--gold);
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 2px 6px;
-  border: 1px solid var(--gold);
-  border-radius: 4px;
-  background: transparent;
+  cursor: pointer;
+  color: var(--slate);
+  transition: color 150ms, border-color 150ms, background 150ms;
+  white-space: nowrap;
   flex-shrink: 0;
   align-self: center;
+}
+
+.mode-chip:hover {
+  color: var(--deep-blue);
+  background: rgba(26, 39, 68, 0.06);
 }
 
 /* ─── Dev mode visibility helper ───────────────────────────────── */
 .dev-mode-hidden {
   display: none !important;
-}
-
-.dev-badge {
-  cursor: pointer;
-  user-select: none;
-}
-
-.dev-badge:hover {
-  opacity: 0.8;
 }
 
 /* ─── Sprint 11 Pass 11: Onboarding card ───────────────────────── */
@@ -3184,6 +3198,12 @@ a:focus-visible {
   flex: 1;
 }
 
+.btn-pdf {
+  background: var(--deep-blue);
+  color: var(--gold);
+  flex: 1;
+}
+
 .btn-export:hover {
   opacity: 0.85;
 }
@@ -3197,6 +3217,8 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  margin-top: 6px;
+  margin-bottom: 4px;
 }
 
 .note-location-label {
@@ -3235,6 +3257,7 @@ a:focus-visible {
   font-size: 10px;
   color: var(--slate);
   line-height: 1.3;
+  margin-bottom: 4px;
 }
 
 /* Location line on Simple Mode note cards */
@@ -3520,4 +3543,39 @@ a:focus-visible {
 .settings-section--highlight {
   animation: sectionRing 2.5s ease-out forwards;
   border-radius: 8px;
+}
+
+/* ─── Sprint 11 Pass 18: Dev Mode toast ─────────────────────── */
+.dev-mode-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 10px 12px;
+  margin: 8px 12px 0;
+  background: rgba(26, 39, 68, 0.07);
+  border: 1px solid rgba(26, 39, 68, 0.14);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.dev-mode-toast__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.dev-mode-toast__body strong { font-weight: 600; }
+
+.dev-mode-toast__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--slate);
+  padding: 0;
+  line-height: 1;
 }

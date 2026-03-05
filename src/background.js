@@ -58,3 +58,13 @@ chrome.commands.onCommand.addListener(async (command) => {
     console.error("Markup: failed to open side panel via shortcut", err);
   }
 });
+
+// ─── Sprint 11 Pass 15: Screenshot capture ──────────────────────
+// Sidebar sends CAPTURE_SCREENSHOT; background captures the visible tab and returns the data URL.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type !== "CAPTURE_SCREENSHOT") return;
+  chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
+    sendResponse({ dataUrl: dataUrl || null });
+  });
+  return true; // keep channel open for async sendResponse
+});

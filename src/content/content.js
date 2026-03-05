@@ -4,13 +4,15 @@ import { getCssSelector } from "css-selector-generator";
 console.log("Markup content script ready");
 
 // ─── Constants ────────────────────────────────────────────────────
-const RING_ID             = "__markup-ring";
-const RING_LABEL_ID       = "__markup-ring-label";
-const ESC_HINT_ID         = "__markup-esc-hint";
-const CURSOR_STYLE_ID     = "__markup-cursor";
-const BADGE_CLASS         = "__markup-badge";
-const HIGHLIGHT_COLOR     = "#FF8400";
-const FLOATING_INPUT_ID   = "__markup-floating-input";
+const RING_ID               = "__markup-ring";
+const RING_LABEL_ID         = "__markup-ring-label";
+const ESC_HINT_ID           = "__markup-esc-hint";
+const CURSOR_STYLE_ID       = "__markup-cursor";
+const BADGE_CLASS           = "__markup-badge";
+const HIGHLIGHT_COLOR       = "#FF8400";
+const FLOATING_INPUT_ID     = "__markup-floating-input";
+const SCREENSHOT_OVERLAY_ID = "__markup-screenshot-overlay";
+const SCREENSHOT_SEL_ID     = "__markup-screenshot-selection";
 
 // ─── Sprint 9: iframe detection (Feature 4b) ─────────────────────────
 // If running inside an iframe, do not inject ring or intercept clicks.
@@ -27,6 +29,12 @@ let ring      = null;
 let selectedEl = null;
 let isActive   = false;
 let currentLockedSelector = null; // Sprint 9: for SPA resilience (4a)
+// Sprint 11 Pass 15: screenshot mode
+let isScreenshotMode = false;
+let ssOverlay        = null;
+let ssSelection      = null;
+let ssStartX         = 0;
+let ssStartY         = 0;
 
 // Fix 4: MutationObserver repositions the ring when the page's DOM shifts
 let mutationObserver = null;
@@ -305,6 +313,36 @@ function hideRing() {
 }
 
 // ─── Selector generation ──────────────────────────────────────────
+// Skip layout/utility classes that carry no identity meaning
+const GENERIC_CLASSES = new Set([
+  'wrapper', 'container', 'inner', 'outer', 'row', 'col', 'block',
+  'flex', 'grid', 'relative', 'absolute', 'hidden', 'clearfix',
+  'wrap', 'holder', 'content',
+]);
+// Tailwind utility prefixes (w-*, h-*, p-*, m-*, text-*, etc.) and state/modifier variants
+const UTILITY_RE = /^[wh]-|^p[xytrbl]?-|^m[xytrbl]?-|^(text|font|bg|border|rounded|shadow|gap|space|z|opacity|cursor|items|justify|self|leading|tracking|ring|overflow|flex|grid)-|^(hover|focus|active|disabled|sm|md|lg|xl|2xl|peer|group|has|aria):/;
+// Framework-generated data attributes that carry no identity meaning.
+// Also rejects any attribute whose value looks like a UUID or long hex hash (8+ hex chars with dashes).
+const FRAMEWORK_ATTR_RE = /\[data-w-id|data-reactid|data-v-[a-z0-9]+|data-[a-z-]+=["'][0-9a-f]{8}(-[0-9a-f]{4,})+["']/;
+// Tags that carry semantic identity
+const SEMANTIC_TAGS = new Set([
+  'header', 'footer', 'main', 'nav', 'aside', 'section', 'article',
+  'form', 'button', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'figure', 'figcaption', 'blockquote', 'dialog',
+  'details', 'summary', 'select', 'input', 'textarea', 'label',
+]);
+
+function isMeaningfulClass(cls) {
+  if (!cls) return false;
+  if (GENERIC_CLASSES.has(cls)) return false;
+  if (UTILITY_RE.test(cls)) return false;
+  return true;
+}
+
+function countMatches(selector) {
+  try { return document.querySelectorAll(selector).length; } catch { return 0; }
+}
+
 function getSelector(el) {
   if (
     el === document.documentElement ||
@@ -314,33 +352,140 @@ function getSelector(el) {
   ) {
     return null;
   }
+
+  const tag = el.tagName.toLowerCase();
+
+  // 1. Unique ID
+  if (el.id && el.id.trim() && !el.id.startsWith('__markup')) {
+    const sel = '#' + CSS.escape(el.id.trim());
+    if (sel.length <= 60 && countMatches(sel) === 1) return sel;
+  }
+
+  // Collect meaningful classes, shortest first
+  const classes = (typeof el.className === 'string')
+    ? el.className.trim().split(/\s+/).filter(isMeaningfulClass)
+        .sort((a, b) => a.length - b.length)
+    : [];
+
+  // 2. Semantic tag + meaningful class
+  if (SEMANTIC_TAGS.has(tag) && classes.length > 0) {
+    for (const cls of classes) {
+      const sel = tag + '.' + CSS.escape(cls);
+      if (sel.length <= 60 && countMatches(sel) === 1) return sel;
+    }
+  }
+
+  // 3. Meaningful class alone; try pairs if no single is unique
+  for (const cls of classes) {
+    const sel = '.' + CSS.escape(cls);
+    if (sel.length <= 60 && countMatches(sel) === 1) return sel;
+  }
+  if (classes.length >= 2) {
+    const sel = '.' + CSS.escape(classes[0]) + '.' + CSS.escape(classes[1]);
+    if (sel.length <= 60 && countMatches(sel) === 1) return sel;
+  }
+
+  // 4. Semantic tag alone
+  if (SEMANTIC_TAGS.has(tag) && countMatches(tag) === 1) return tag;
+
+  // 5. Fall back to css-selector-generator, but reject if it uses framework-generated attributes
   try {
-    return getCssSelector(el);
+    const sel = getCssSelector(el);
+    if (sel && !FRAMEWORK_ATTR_RE.test(sel)) return sel;
+    return null;
   } catch {
     return null;
   }
 }
 
+// ─── Sprint 11 Pass 9: Container element detection ────────────────
+// These tags dump all child text as innerText — useless as a label.
+const CONTAINER_TAGS = new Set([
+  'nav', 'header', 'footer', 'section', 'main', 'aside',
+  'ul', 'ol', 'menu', 'form', 'dialog',
+]);
+// Concise role-based fallback descriptions for container elements
+const CONTAINER_ROLE_LABELS = {
+  nav:     "Navigation",
+  header:  "Page header",
+  footer:  "Page footer",
+  main:    "Main content",
+  aside:   "Sidebar",
+  section: "Section",
+  ul:      "List",
+  ol:      "List",
+  menu:    "Menu",
+  form:    "Form",
+  dialog:  "Dialog",
+};
+
 // ─── Sprint 8 F5: Human-readable element label ────────────────────
-// Priority: aria-label > alt > visible text (40 chars) > tagName.class
+// Priority for containers: aria-label > aria-labelledby > role description > innerText (40)
+// Priority for leaf elements: aria-label > alt > innerText (120) > tagName.class
 function getElementLabel(el) {
+  // 1. aria-label — always wins for all elements
   const ariaLabel = el.getAttribute("aria-label");
   if (ariaLabel && ariaLabel.trim()) {
-    return ariaLabel.trim().slice(0, 40);
+    return ariaLabel.trim().slice(0, 120);
   }
+
+  // 2. alt text (images, inputs)
   const alt = el.getAttribute("alt");
   if (alt && alt.trim()) {
-    return alt.trim().slice(0, 40);
+    return alt.trim().slice(0, 120);
   }
-  const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
-  if (text) {
-    return text.length > 40 ? text.slice(0, 40) + "…" : text;
+
+  const tag = el.tagName.toLowerCase();
+
+  if (CONTAINER_TAGS.has(tag)) {
+    // 3. aria-labelledby — resolve to the referenced element's text
+    const labelledBy = el.getAttribute("aria-labelledby");
+    if (labelledBy && labelledBy.trim()) {
+      const ref = document.getElementById(labelledBy.trim().split(/\s+/)[0]);
+      if (ref) {
+        const refText = (ref.innerText || ref.textContent || "").trim().replace(/\s+/g, " ");
+        if (refText) return refText.slice(0, 120);
+      }
+    }
+    // 4. Role-based description (clean, no child-text noise)
+    const roleLabel = CONTAINER_ROLE_LABELS[tag];
+    if (roleLabel) return roleLabel;
+    // 5. Last resort: innerText capped at 40 chars for containers
+    const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
+    if (text) return text.length > 40 ? text.slice(0, 40) + "…" : text;
+  } else {
+    // Non-container leaf elements: up to 120 chars of innerText
+    const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
+    if (text) {
+      return text.length > 120 ? text.slice(0, 120) + "…" : text;
+    }
   }
+
   // Fallback: tagName + first class
   const cls = typeof el.className === "string" && el.className.trim()
     ? "." + el.className.trim().split(/\s+/)[0]
     : "";
-  return el.tagName.toLowerCase() + cls;
+  return tag + cls;
+}
+
+// ─── Sprint 11 Pass 8: Computed semantic role ──────────────────────
+function getElementRole(el) {
+  const explicit = el.getAttribute("role");
+  if (explicit && explicit.trim()) return explicit.trim();
+  const roleMap = {
+    nav:    "navigation",
+    button: "button",
+    h1: "heading", h2: "heading", h3: "heading",
+    h4: "heading", h5: "heading", h6: "heading",
+    header: "banner",
+    footer: "contentinfo",
+    main:   "main",
+    aside:  "complementary",
+    a:      "link",
+    input:  "textbox",
+    select: "listbox",
+  };
+  return roleMap[el.tagName.toLowerCase()] || null;
 }
 
 // ─── Sprint 8 F6: Annotation badges ──────────────────────────────
@@ -516,9 +661,26 @@ function onClick(e) {
     "| selector:", selector
   );
 
-  // Sprint 8 F5: include human-readable label with selection message
+  // Sprint 11 Pass 8/9: include label, role, and parent context
   const elementLabel = getElementLabel(target);
-  sendToSidebar({ type: "ELEMENT_SELECTED", selector, elementLabel });
+  const elementRole  = getElementRole(target);
+
+  // Compute parent context — suppress when noisy or redundant
+  const parentEl = target.parentElement;
+  let parentContext = null;
+  if (parentEl
+      && parentEl !== document.body
+      && parentEl !== document.documentElement
+      && parentEl.tagName.toLowerCase() !== "main") {
+    const pLabel = getElementLabel(parentEl);
+    if (pLabel && pLabel.trim()) {
+      // Suppress if the parent label shares the same first 30 chars as the element label
+      // (catches identical labels and the common case where child text == parent text)
+      const same30 = elementLabel.slice(0, 30) === pLabel.slice(0, 30);
+      if (!same30) parentContext = pLabel;
+    }
+  }
+  sendToSidebar({ type: "ELEMENT_SELECTED", selector, elementLabel, elementRole, parentContext });
   showFloatingInput(target);
 }
 
@@ -579,11 +741,169 @@ function deactivate() {
   sendToSidebar({ type: "MARKUP_DEACTIVATED" });
 }
 
+// ─── Sprint 11 Pass 15: Screenshot mode ───────────────────────────
+function enterScreenshotMode() {
+  if (isScreenshotMode) return;
+  isScreenshotMode = true;
+
+  // Suspend element selection event handlers for the duration of screenshot mode
+  document.removeEventListener("mouseover", onMouseover, { capture: true });
+  document.removeEventListener("mouseout",  onMouseout,  { capture: true });
+  document.removeEventListener("click",     onClick,     { capture: true });
+  hideRing();
+
+  // Dim overlay — captures mouse events, cursor: crosshair
+  ssOverlay = document.createElement("div");
+  ssOverlay.id = SCREENSHOT_OVERLAY_ID;
+  Object.assign(ssOverlay.style, {
+    all:          "initial",
+    position:     "fixed",
+    inset:        "0",
+    zIndex:       "999998",
+    cursor:       "crosshair",
+    userSelect:   "none",
+  });
+  document.documentElement.appendChild(ssOverlay);
+
+  const ssBanner = document.createElement("div");
+  ssBanner.id = "__markup-ss-banner";
+  Object.assign(ssBanner.style, {
+    all:            "initial",
+    position:       "fixed",
+    top:            "16px",
+    left:           "50%",
+    transform:      "translateX(-50%)",
+    zIndex:         "1000000",
+    background:     "rgba(13,13,13,0.82)",
+    color:          "#FAF8F3",
+    fontFamily:     "DM Sans, sans-serif",
+    fontSize:       "13px",
+    fontWeight:     "500",
+    padding:        "8px 18px",
+    borderRadius:   "20px",
+    pointerEvents:  "none",
+    whiteSpace:     "nowrap",
+    letterSpacing:  "0.02em",
+  });
+  ssBanner.textContent = "Click and drag to capture a region  ·  Esc to cancel";
+  document.documentElement.appendChild(ssBanner);
+
+  // Selection box — hidden until drag starts; box-shadow creates the dim effect outside selection
+  ssSelection = document.createElement("div");
+  ssSelection.id = SCREENSHOT_SEL_ID;
+  Object.assign(ssSelection.style, {
+    all:          "initial",
+    position:     "fixed",
+    display:      "none",
+    border:       "2px dashed #C9A84C",
+    boxShadow:    "0 0 0 9999px rgba(0,0,0,0.45)",
+    background:   "transparent",
+    zIndex:       "999999",
+    pointerEvents:"none",
+    boxSizing:    "border-box",
+  });
+  document.documentElement.appendChild(ssSelection);
+
+  showEscHint("ESC · CANCEL SCREENSHOT");
+
+  ssOverlay.addEventListener("mousedown", onSsMousedown);
+  document.addEventListener("keydown", onSsKeydown);
+}
+
+function exitScreenshotMode() {
+  if (!isScreenshotMode) return;
+  isScreenshotMode = false;
+
+  ssOverlay?.removeEventListener("mousedown", onSsMousedown);
+  document.removeEventListener("keydown",    onSsKeydown);
+  document.removeEventListener("mousemove",  onSsMousemove);
+  document.removeEventListener("mouseup",    onSsMouseup);
+
+  ssOverlay?.remove();   ssOverlay   = null;
+  ssSelection?.remove(); ssSelection = null;
+
+  const ssBanner = document.getElementById("__markup-ss-banner");
+  if (ssBanner) ssBanner.remove();
+
+  sendToSidebar({ type: "SCREENSHOT_MODE_EXITED" });
+
+  hideEscHint();
+
+  // Restore element selection handlers if markup is still active
+  if (isActive) {
+    document.addEventListener("mouseover", onMouseover, { capture: true, passive: true });
+    document.addEventListener("mouseout",  onMouseout,  { capture: true, passive: true });
+    document.addEventListener("click",     onClick,     { capture: true });
+    showEscHint("ESC · EXIT SELECTOR");
+  }
+}
+
+function onSsKeydown(e) {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  exitScreenshotMode();
+}
+
+function onSsMousedown(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  ssStartX = e.clientX;
+  ssStartY = e.clientY;
+  document.addEventListener("mousemove", onSsMousemove);
+  document.addEventListener("mouseup",   onSsMouseup);
+}
+
+function onSsMousemove(e) {
+  const x = Math.min(e.clientX, ssStartX);
+  const y = Math.min(e.clientY, ssStartY);
+  const w = Math.abs(e.clientX - ssStartX);
+  const h = Math.abs(e.clientY - ssStartY);
+  if (w > 4 || h > 4) {
+    ssSelection.style.display  = "block";
+    ssSelection.style.left     = x + "px";
+    ssSelection.style.top      = y + "px";
+    ssSelection.style.width    = w + "px";
+    ssSelection.style.height   = h + "px";
+  }
+}
+
+function onSsMouseup(e) {
+  document.removeEventListener("mousemove", onSsMousemove);
+  document.removeEventListener("mouseup",   onSsMouseup);
+
+  const dx = Math.abs(e.clientX - ssStartX);
+  const dy = Math.abs(e.clientY - ssStartY);
+
+  exitScreenshotMode();
+
+  const dpr = window.devicePixelRatio || 1;
+  let rect;
+  if (dx < 5 && dy < 5) {
+    // Click without meaningful drag — full viewport
+    rect = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight, dpr };
+  } else {
+    rect = {
+      x:      Math.min(e.clientX, ssStartX),
+      y:      Math.min(e.clientY, ssStartY),
+      width:  dx,
+      height: dy,
+      dpr,
+    };
+  }
+  sendToSidebar({ type: "SCREENSHOT_REGION_SELECTED", rect });
+}
+
 // ─── Message listener ─────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "MARKUP_ACTIVATE") activate();
+  if (message.type === "MARKUP_ACTIVATE") {
+    exitScreenshotMode(); // cancel screenshot if active (mutually exclusive)
+    activate();
+  }
   if (message.type === "MARKUP_DEACTIVATE") deactivate();
   if (message.type === "MARKUP_DESELECT") clearSelection();
+  // Sprint 11 Pass 15: enter/exit screenshot selection mode
+  if (message.type === "ENTER_SCREENSHOT_MODE") enterScreenshotMode();
+  if (message.type === "EXIT_SCREENSHOT_MODE") exitScreenshotMode();
 
   // Sprint 8 F6: sidebar sends updated notes list — re-render annotation badges
   if (message.type === "NOTES_UPDATED") {

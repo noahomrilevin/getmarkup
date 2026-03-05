@@ -342,7 +342,7 @@ function applyDevMode(enabled) {
   devMode = enabled;
   // Mode chip: DEV when dev mode, SIMPLE when simple mode
   if (devBadgeEl) {
-    devBadgeEl.textContent = enabled ? "DEV" : "SIMPLE";
+    devBadgeEl.textContent = enabled ? "DEV MODE" : "SIMPLE MODE";
     devBadgeEl.hidden = false;
   }
   // Show/hide sort toggle (only meaningful in Developer Mode)
@@ -400,6 +400,29 @@ async function setDevMode(enabled) {
   await safeSet({ [DEV_MODE_KEY]: enabled });
   if (devModeToggle) devModeToggle.checked = enabled;
   applyDevMode(enabled);
+}
+
+function showDevModeToast() {
+  const existing = document.getElementById("dev-mode-toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "dev-mode-toast";
+  toast.className = "dev-mode-toast";
+  toast.innerHTML = `
+    <div class="dev-mode-toast__body">
+      <strong>Developer Mode on</strong>
+      <span>Selectors, type &amp; severity pickers are now visible. Toggle off via the chip at the top or in Settings.</span>
+    </div>
+    <button class="dev-mode-toast__close" aria-label="Dismiss">✕</button>
+  `;
+  toast.querySelector(".dev-mode-toast__close").addEventListener("click", () => toast.remove());
+  const mainView = document.getElementById("main-view");
+  if (mainView) mainView.prepend(toast);
+  setTimeout(() => {
+    toast.style.transition = "opacity 400ms ease";
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 400);
+  }, 4000);
 }
 
 // ─── Sprint 11 Pass 11: Onboarding card (all installs, both modes) ──
@@ -1766,10 +1789,44 @@ function dataUrlToArrayBuffer(dataUrl) {
   return buffer;
 }
 
-// Screenshot button: send ENTER_SCREENSHOT_MODE to content script
+// Screenshot button: inject content script if needed, then enter screenshot mode
 if (screenshotBtn) {
   screenshotBtn.addEventListener("click", async () => {
     if (!currentTabId) return;
+
+    // If already active — cancel screenshot mode
+    if (screenshotBtn.classList.contains("btn-screenshot--active")) {
+      chrome.tabs.sendMessage(currentTabId, { type: "EXIT_SCREENSHOT_MODE" }).catch(() => {});
+      screenshotBtn.classList.remove("btn-screenshot--active");
+      screenshotBtn.textContent = "SCREENSHOT";
+      return;
+    }
+
+    const tab = await chrome.tabs.get(currentTabId).catch(() => null);
+    if (!tab) return;
+    const url = tab.url || "";
+    const isNormalPage = url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://");
+    if (!isNormalPage) return;
+
+    let ready = false;
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: currentTabId },
+        func: (extId) => window["__mkp_" + extId + "_ready"] === true,
+        args: [chrome.runtime.id],
+      });
+      ready = results?.[0]?.result === true;
+    } catch { ready = false; }
+
+    if (!ready) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: currentTabId }, files: ["content/content.js"] });
+        await new Promise(r => setTimeout(r, 400));
+      } catch { return; }
+    }
+
+    screenshotBtn.classList.add("btn-screenshot--active");
+    screenshotBtn.textContent = "CANCEL";
     chrome.tabs.sendMessage(currentTabId, { type: "ENTER_SCREENSHOT_MODE" }).catch(() => {});
   });
 }
@@ -2397,7 +2454,7 @@ downloadHtmlBtn.addEventListener("click", async () => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width">
-  <title>Markup Report \u2014 ${escapeHtml(domain)}</title>
+  <title>markup-report-${domain}-${dateStr}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap');
     body {
@@ -2543,7 +2600,9 @@ downloadHtmlBtn.addEventListener("click", async () => {
       color: #6B7A99;
       text-align: center;
     }
+    @media print { .report-footer { page-break-inside: avoid; } }
   </style>
+  <script>window.addEventListener('load', function() { window.print(); });<\/script>
 </head>
 <body>
   <div class="report-header">
@@ -2561,11 +2620,8 @@ downloadHtmlBtn.addEventListener("click", async () => {
 
   const blob = new Blob([html], { type: "text/html" });
   const blobUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = `markup-report-${domain}-${dateStr}.html`;
-  a.click();
-  URL.revokeObjectURL(blobUrl);
+  await chrome.tabs.create({ url: blobUrl });
+  // blobUrl stays alive until the tab loads — do not revoke immediately
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
@@ -2661,11 +2717,18 @@ if (devModeToggle) {
   });
 }
 
-// Mode chip click — open settings and focus the mode toggle
+// Mode chip click — directly toggle dev/simple mode
 if (devBadgeEl) {
-  devBadgeEl.addEventListener("click", () => {
-    showSettings();
-    setTimeout(() => { if (devModeToggle) devModeToggle.focus(); }, 100);
+  devBadgeEl.addEventListener("click", async () => {
+    const entering = !devMode;
+    await setDevMode(entering);
+    if (entering) {
+      const shown = await safeGet("markup_dev_intro_shown", false);
+      if (!shown) {
+        await safeSet({ markup_dev_intro_shown: true });
+        showDevModeToast();
+      }
+    }
   });
 }
 
@@ -2887,6 +2950,14 @@ chrome.runtime.onMessage.addListener((message) => {
       card.scrollIntoView({ behavior: "smooth", block: "nearest" });
       card.classList.add("note-card--highlighted");
       setTimeout(() => card.classList.remove("note-card--highlighted"), 1200);
+    }
+  }
+
+  // Reset screenshot button when mode exits (cancel or region captured)
+  if (message.type === "SCREENSHOT_MODE_EXITED" || message.type === "SCREENSHOT_REGION_SELECTED") {
+    if (screenshotBtn) {
+      screenshotBtn.classList.remove("btn-screenshot--active");
+      screenshotBtn.textContent = "SCREENSHOT";
     }
   }
 
