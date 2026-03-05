@@ -457,8 +457,9 @@ html, body {
 .markup-header {
   display: flex;
   align-items: center;
-  padding: 0 12px 0 16px;
-  height: 48px;
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 52px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
   background: var(--deep-blue);
@@ -467,16 +468,16 @@ html, body {
 .header-title-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
-  align-self: stretch;
+  /* overflow: hidden removed — was clipping mode chip */
 }
 
 .markup-title {
   font-family: var(--font-display);
   font-style: italic;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 400;
   color: var(--gold);
   letter-spacing: -0.01em;
@@ -485,30 +486,45 @@ html, body {
   transform: translateY(-1px);
 }
 
+/* Dot separator between logotype and note count */
+.markup-note-count::before {
+  content: "·";
+  margin-right: 10px;
+  opacity: 0.35;
+}
+
 .markup-note-count {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--slate);
   line-height: 1;
   align-self: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  /* flex-shrink: 0 removed — allows count to compress so mode chip is never clipped */
 }
 
 .header-icon-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+  margin-left: 12px;
 }
 
 /* Header children on deep-blue */
 .markup-header .icon-btn {
-  color: var(--slate);
+  color: rgba(107, 122, 153, 0.7);
   transition: color 0.2s ease;
 }
 .markup-header .icon-btn:hover {
   color: var(--warm-white);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
 }
 
 /* ─── Activation hint ────────────────────────────────────────── */
@@ -631,7 +647,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
+  padding: 6px 12px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--paper);
@@ -739,8 +755,8 @@ html, body {
   color: var(--deep-blue);
   border: none;
   border-radius: 6px;
-  padding: 0 var(--space-md);
-  height: 48px;
+  padding: 8px 14px;
+  height: auto;
   font-family: var(--font-body);
   font-size: var(--size-sm);
   font-weight: 500;
@@ -847,8 +863,8 @@ html, body {
 
 /* ─── Toggle button ───────────────────────────────────────────── */
 .toggle-btn {
-  padding: 0 var(--space-md);
-  height: 48px;
+  padding: 7px var(--space-md);
+  height: auto;
   border: 1px solid var(--gold);
   border-radius: 6px;
   background: transparent;
@@ -957,6 +973,32 @@ html, body {
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid rgba(201, 168, 76, 0.3);
   flex-shrink: 0;
+}
+
+/* ─── Brief inline edit (contenteditable spans inside brief body) ─ */
+.brief-inline-edit {
+  cursor: text;
+  border-bottom: 1px dashed rgba(201, 168, 76, 0.4);
+  padding: 0 2px;
+  min-width: 30px;
+  display: inline-block;
+  outline: none;
+  color: inherit;
+  transition: border-color 150ms;
+}
+
+.brief-inline-edit:empty::before {
+  content: attr(data-placeholder);
+  color: var(--slate);
+  opacity: 0.5;
+}
+
+.brief-inline-edit:hover {
+  border-bottom-color: var(--slate);
+}
+
+.brief-inline-edit:focus {
+  border-bottom-color: var(--gold);
 }
 
 .brief-panel-logo {
@@ -1670,14 +1712,15 @@ html, body {
 
 /* ─── Screenshot button ───────────────────────────────────────── */
 .btn-screenshot {
-  padding: 0 var(--space-sm);
-  height: 48px;
+  width: 140px;
+  padding: 7px 10px;
+  height: auto;
   border: 1px solid rgba(201, 168, 76, 0.4);
   border-radius: 6px;
   background: transparent;
   color: var(--slate);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: var(--size-sm);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1721,17 +1764,35 @@ html, body {
 /* ─── Save row ────────────────────────────────────────────────── */
 .save-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 6px; /* left 4px: form-area adds 8px = 12px total, matching actions padding */
 }
 
 .save-row .btn-save {
-  width: 100%;
+  width: 140px;
+  flex: none;
+  padding: 7px 14px;
+  height: auto;
 }
 
-.save-row .save-hint {
-  text-align: right;
+.save-row__hints {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  font-size: var(--size-xs);
+  color: var(--slate);
+}
+
+.save-row__hints .save-hint {
+  padding-right: 8px;
+  border-right: 1px solid var(--border);
+}
+
+.save-row__hints .voice-notes-link {
+  padding-left: 8px;
+  font-size: var(--size-xs);
 }
 
 /* Edit mode: UPDATE NOTE button — gold bg + dynamic hint */
@@ -2806,17 +2867,17 @@ a:focus-visible {
 
 /* ─── Mode chip (toggles dev/simple mode) ────────────────────── */
 .mode-chip {
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 4px;
-  border: 1px solid currentColor;
+  border: 1px solid rgba(107, 122, 153, 0.5);
   background: transparent;
   font-family: var(--font-body);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  color: var(--slate);
+  color: rgba(107, 122, 153, 0.8);
   transition: color 150ms, border-color 150ms, background 150ms;
   white-space: nowrap;
   flex-shrink: 0;
@@ -2825,7 +2886,20 @@ a:focus-visible {
 
 .mode-chip:hover {
   color: var(--deep-blue);
-  background: rgba(26, 39, 68, 0.06);
+  background: rgba(26, 39, 68, 0.12);
+  border-color: var(--mid-blue);
+}
+
+.mode-chip--dev {
+  background: var(--gold);
+  color: var(--deep-blue);
+  border-color: var(--gold);
+}
+
+.mode-chip--dev:hover {
+  background: #c49228;
+  border-color: #c49228;
+  color: var(--deep-blue);
 }
 
 /* ─── Dev mode visibility helper ───────────────────────────────── */
@@ -3249,6 +3323,12 @@ a:focus-visible {
 .note-location-input:focus {
   outline: none;
   border-color: rgba(201, 168, 76, 0.45);
+}
+
+.note-location-input.location-input--preview {
+  color: var(--slate);
+  font-style: italic;
+  opacity: 0.7;
 }
 
 /* Hint text below location input */

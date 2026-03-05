@@ -48,6 +48,8 @@ let currentAnnotatedNotes = []; // last notes received from sidebar
 let badgeScrollRAF = null; // RAF id for badge reposition
 
 // ─── Fix 2: Cursor override ───────────────────────────────────────
+const IFRAME_BLOCK_ID = "__markup-iframe-block";
+
 function injectCursorOverride() {
   if (document.getElementById(CURSOR_STYLE_ID)) return;
   const style = document.createElement("style");
@@ -58,6 +60,19 @@ function injectCursorOverride() {
 
 function removeCursorOverride() {
   document.getElementById(CURSOR_STYLE_ID)?.remove();
+}
+
+// Blocks iframes from receiving pointer events during selection mode
+function injectIframeBlock() {
+  if (document.getElementById(IFRAME_BLOCK_ID)) return;
+  const style = document.createElement("style");
+  style.id = IFRAME_BLOCK_ID;
+  style.textContent = "iframe { pointer-events: none !important; }";
+  (document.head || document.documentElement).appendChild(style);
+}
+
+function removeIframeBlock() {
+  document.getElementById(IFRAME_BLOCK_ID)?.remove();
 }
 
 // ─── MutationObserver — reposition ring when page layout shifts ───
@@ -612,7 +627,8 @@ function onMouseover(e) {
   showEscHint("ESC · EXIT SELECTOR");
   const selector = getSelector(target);
   if (selector) {
-    sendToSidebar({ type: "ELEMENT_HOVERED", selector });
+    const elementLabel = getElementLabel(target);
+    sendToSidebar({ type: "ELEMENT_HOVERED", selector, elementLabel });
   }
 }
 
@@ -689,6 +705,30 @@ function onScroll() {
   if (badgeElements.length > 0) onBadgeScroll();
 }
 
+function onMousedown(e) {
+  if (!isActive) return;
+  const target = e.target;
+  if (target === ring || target.id === RING_ID) return;
+  if (target.classList.contains(BADGE_CLASS)) return;
+  const floatingEl = document.getElementById(FLOATING_INPUT_ID);
+  if (floatingEl && floatingEl.contains(target)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}
+
+function onPointerdown(e) {
+  if (!isActive) return;
+  const target = e.target;
+  if (target === ring || target.id === RING_ID) return;
+  if (target.classList.contains(BADGE_CLASS)) return;
+  const floatingEl = document.getElementById(FLOATING_INPUT_ID);
+  if (floatingEl && floatingEl.contains(target)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}
+
 function onKeydown(e) {
   if (e.key !== "Escape") return;
   if (selectedEl) {
@@ -710,13 +750,16 @@ function activate() {
   selectedEl = null;
   hideRing();
   injectCursorOverride();
+  injectIframeBlock();
   ensureRing();
   startMutationObserver();
   document.addEventListener("mouseover", onMouseover, { capture: true, passive: true });
   document.addEventListener("mouseout", onMouseout, { capture: true, passive: true });
   document.addEventListener("click", onClick, { capture: true });
+  document.addEventListener("mousedown", onMousedown, { capture: true });
+  document.addEventListener("pointerdown", onPointerdown, { capture: true });
   document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-  document.addEventListener("keydown", onKeydown);
+  document.addEventListener("keydown", onKeydown, true);
   // Re-render badges if we have notes waiting
   if (currentAnnotatedNotes.length > 0) renderBadges();
   showEscHint("ESC · EXIT SELECTOR");
@@ -731,13 +774,16 @@ function deactivate() {
   hideRing();
   hideEscHint();
   removeCursorOverride();
+  removeIframeBlock();
   stopMutationObserver();
   clearAllBadges(); // Sprint 8 F6: remove all annotation badges on deactivate
   document.removeEventListener("mouseover", onMouseover, { capture: true });
   document.removeEventListener("mouseout", onMouseout, { capture: true });
   document.removeEventListener("click", onClick, { capture: true });
+  document.removeEventListener("mousedown", onMousedown, { capture: true });
+  document.removeEventListener("pointerdown", onPointerdown, { capture: true });
   document.removeEventListener("scroll", onScroll, { capture: true });
-  document.removeEventListener("keydown", onKeydown);
+  document.removeEventListener("keydown", onKeydown, true);
   sendToSidebar({ type: "MARKUP_DEACTIVATED" });
 }
 
@@ -804,10 +850,8 @@ function enterScreenshotMode() {
   });
   document.documentElement.appendChild(ssSelection);
 
-  showEscHint("ESC · CANCEL SCREENSHOT");
-
   ssOverlay.addEventListener("mousedown", onSsMousedown);
-  document.addEventListener("keydown", onSsKeydown);
+  document.addEventListener("keydown", onSsKeydown, true);
 }
 
 function exitScreenshotMode() {
@@ -815,7 +859,7 @@ function exitScreenshotMode() {
   isScreenshotMode = false;
 
   ssOverlay?.removeEventListener("mousedown", onSsMousedown);
-  document.removeEventListener("keydown",    onSsKeydown);
+  document.removeEventListener("keydown",    onSsKeydown, true);
   document.removeEventListener("mousemove",  onSsMousemove);
   document.removeEventListener("mouseup",    onSsMouseup);
 
@@ -826,8 +870,6 @@ function exitScreenshotMode() {
   if (ssBanner) ssBanner.remove();
 
   sendToSidebar({ type: "SCREENSHOT_MODE_EXITED" });
-
-  hideEscHint();
 
   // Restore element selection handlers if markup is still active
   if (isActive) {
@@ -890,7 +932,13 @@ function onSsMouseup(e) {
       dpr,
     };
   }
-  sendToSidebar({ type: "SCREENSHOT_REGION_SELECTED", rect });
+
+  // Wait for DOM removal to repaint before triggering capture
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      sendToSidebar({ type: "SCREENSHOT_REGION_SELECTED", rect });
+    });
+  });
 }
 
 // ─── Message listener ─────────────────────────────────────────────

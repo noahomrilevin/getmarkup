@@ -93,6 +93,7 @@
       <div class="brief-panel__toolbar">
         <button class="brief-back-link" id="close-brief">← Back to Notes</button>
       </div>
+
       <div class="brief-generating" id="brief-generating" hidden>
         <div class="brief-generating__dots">
           <span>·</span><span>·</span><span>·</span>
@@ -151,18 +152,16 @@
           <button type="button" class="image-folder-banner__cta" id="image-folder-choose">CHOOSE FOLDER →</button>
         </div>
 
-        <!-- Location field — both modes. Dev: pre-filled with selector; Simple: pre-filled with element label -->
+        <!-- Location field — both modes -->
         <div class="note-location-row" id="note-location-row">
-          <label class="note-location-label" for="note-location">Location (optional)</label>
           <input
             class="note-location-input"
             id="note-location"
             type="text"
-            placeholder="e.g. Hero section, sticky nav, checkout modal..."
+            placeholder="Element or location (optional)"
             autocomplete="off"
             spellcheck="false"
           />
-          <span class="note-location-hint">Leave blank to use element label in Brief</span>
         </div>
 
         <textarea
@@ -179,24 +178,19 @@
           <button type="button" class="image-preview__remove" id="image-preview-remove" aria-label="Remove image">✕</button>
         </div>
 
-        <div class="voice-notes-hint">
-          <a class="voice-notes-link" id="voice-notes-settings-link" href="#">🎙 Voice notes</a>
-        </div>
       </form>
 
       <div class="save-row">
         <button class="btn-save" type="button" id="save-note">SAVE NOTE</button>
-        <span class="save-hint">Cmd+Enter to save</span>
+        <div class="save-row__hints">
+          <span class="save-hint">Cmd+Enter</span>
+          <a class="voice-notes-link" id="voice-notes-settings-link" href="#">🎙 Voice notes</a>
+        </div>
       </div>
     </div>
 
     <!-- 8–11 · Generate Brief + Toggle (side-by-side) -->
     <div class="markup-actions" id="markup-actions">
-      <div class="brief-sort-toggle" id="brief-sort-toggle">
-        <button class="brief-sort-btn brief-sort-btn--active" data-sort="severity">BY SEVERITY</button>
-        <span class="sort-sep">·</span>
-        <button class="brief-sort-btn" data-sort="chronological">BY CHRONOLOGICAL</button>
-      </div>
       <div class="markup-toggle-section" id="markup-toggle-section">
         <div class="bottom-btn-row">
           <div class="bottom-select-group">
@@ -332,6 +326,8 @@
   </div>
 
   <script src="jszip.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+  <script src="html2canvas.min.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

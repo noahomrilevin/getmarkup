@@ -157,30 +157,118 @@ Four levels: Critical / High / Medium (default) / Low.
 
 ---
 
-## Launch Track
+## Versioning
 
-- [ ] Extension icon — 128×128 PNG + 16/32/48px set, gold/blue M, matches brand tokens
-- [ ] Chrome Web Store submission — 5 screenshots at 1280×800, store listing copy, category, keywords
-- [ ] Privacy policy page — required by Google, host at getmarkup.dev/privacy
-- [ ] Demo video — 60 seconds, screen recording of full loop
-- [ ] getmarkup.dev landing page — domain live, site not built
-- [ ] README GIF demo + license badge
-- [ ] CONTRIBUTING.md
-- [ ] Product Hunt prep
+SemVer: `MAJOR.MINOR.PATCH`
+
+| Version | Milestone |
+|---|---|
+| `0.9.0` | Current — Sprint 11 |
+| `1.0.0` | Chrome Web Store launch |
+| `1.1.0` | Post-launch: single-issue quick-copy, V2 polish based on user feedback |
+| `2.0.0` | Think Aloud (built-in mic, real-time voice notes) |
+| `3.0.0` | Remote Review (requires backend) |
 
 ---
 
-## Sprint 12 Backlog — AI Brief
+## Customer ICPs
 
-| Detail | Spec |
-|---|---|
-| Settings | API key input (OpenAI or Anthropic) + model selector stored as `markup_ai_key` and `markup_ai_model` |
-| Trigger | "Generate Brief" — if key set, calls AI. If not, falls back to template brief with prompt to add key |
-| Input | All domain-scoped notes formatted as structured context, passed as system prompt |
-| Output | Streaming response. Sections: Summary, Critical Issues, Root Cause Analysis, Recommendations, Code Fixes |
-| Streaming | Token by token into brief panel — same "BUILDING BRIEF…" loading state |
-| Fallback | API failure → inline error + offer template brief |
-| Privacy note | One-time disclosure in settings when user first adds a key |
+**Primary — Non-developer vibe coder**
+Cannot read CSS/HTML. Relies entirely on Claude/Cursor to fix visual issues. Reviews output in Chrome, not VS Code. Highest acute pain — building without any QA safety net. Examples: PMs building internal tools, designers who vibe code, non-technical indie founders. Only reachable via Chrome extension.
+
+**Secondary — Solo developer who vibe codes for speed**
+Can read code but uses AI as a partner. Needs batch-fix briefs. Already has CLAUDE.md workflow — Markup fits naturally. Comfortable with VS Code. Reachable via Chrome extension first, VS Code extension later.
+
+**Tertiary**
+Freelancers reviewing deliverables before client handoff. Accessibility auditors doing quick passes.
+
+**Not in scope**
+Large teams with PM-driven issue tracking (they have Jira/Linear). Non-web developers.
+
+---
+
+## Competitive Position
+
+The gap nobody has filled: Chrome extension that works on localhost, captures element-attached notes, and outputs structured AI briefs.
+
+| Tool | Works on localhost? | Visual annotation? | AI output? |
+|---|---|---|---|
+| Jam.dev | ❌ | ✅ | ❌ |
+| BugHerd | ❌ | ✅ | ❌ |
+| Loom | ✅ | ❌ (video) | ❌ |
+| **Markup** | **✅** | **✅** | **✅** |
+
+---
+
+## Launch Track
+
+### Pre-Launch Checklist
+
+**Extension**
+- [ ] Extension icon — 128×128 PNG + 16/32/48px set, gold/blue M, matches brand tokens
+- [ ] No console errors on clean load
+- [ ] Tested on localhost, file://, and live https://
+- [ ] Node version pinned in `.nvmrc`
+
+**Repository**
+- [ ] README: what it is, load-unpacked install instructions, GIF demo, MIT license
+- [ ] LICENSE file present (MIT)
+- [ ] CHANGELOG.md has v1.0.0 entry
+- [ ] CONTRIBUTING.md exists
+- [ ] GitHub repo is public
+
+**Chrome Web Store**
+- [ ] Short description (132 chars): `Annotate any page on localhost or live. Generate an AI fix brief. Paste into Claude, Cursor, or Copilot.`
+- [ ] Long description (~500 words)
+- [ ] 5 screenshots at 1280×800: (1) sidebar with notes, (2) brief generated, (3) brief pasted into Claude, (4) element selection ring on real page, (5) settings/archive panel
+- [ ] Privacy policy live at getmarkup.dev/privacy
+- [ ] Category: Productivity. Keywords: annotation, review, AI, developer, feedback
+- [ ] Publisher account verified
+
+**Site (getmarkup.dev)**
+- [ ] Landing page live — see `reviewbrief/05-ship/landing-page-plan.md` for full spec
+- [ ] `/privacy` page live (required for store submission)
+- [ ] Open Graph image (1200×630)
+- [ ] "Add to Chrome" CTA links to live store listing
+
+**Demo + Distribution**
+- [ ] Demo GIF — 60 seconds: open sidebar → select element → voice note → generate brief → copy. This is the critical path blocker for the landing page hero.
+- [ ] Twitter thread written
+- [ ] LinkedIn post written
+- [ ] Hacker News "Show HN" post drafted
+- [ ] Product Hunt listing prepared (midnight PT submission)
+- [ ] Substack launch article written (personal story angle: built with one arm + Wispr Flow)
+
+### Launch Day Runbook
+
+```
+Before launch day:
+  → Chrome Web Store review approved (submit 3+ days early — review can take 1–7 days)
+  → getmarkup.dev deployed and tested
+  → All posts drafted and saved
+
+Launch day (Tuesday or Wednesday for best PH performance):
+08:00 — Confirm Chrome Web Store listing is live
+08:30 — Publish getmarkup.dev
+09:00 — Post Twitter thread
+09:30 — Post LinkedIn
+10:00 — Submit "Show HN" to Hacker News (best time: 9–11am US Eastern)
+12:01am PT (night before) — Submit Product Hunt listing
+All day — Respond to every comment and reply
+EOD    — Note install count, top questions, first bug reports
+```
+
+**Product Hunt timing:** Launch on PH within 2–4 weeks of Chrome Store go-live. After 6 weeks the "new" energy fades. If more time passes, frame it as a significant update instead.
+
+---
+
+## AI Brief — Evaluate Post-Launch (Not Scheduled)
+
+**Decision deferred.** The brief output is already structured for AI consumption (severity, selector, element context, location, parent context). Users who paste it into Claude or ChatGPT get better analysis than any in-extension AI layer could produce. Adding an in-extension AI Brief adds: API key friction, cost per brief, complexity, and a narrower output than a user's own AI conversation.
+
+**Revisit after launch** with real user data. If users consistently report that they want a one-click AI analysis without leaving the extension, and the brief-to-AI handoff is genuinely friction-heavy, then spec it then. The only scenario that earns it is a future backend integration enabling "fix this in Cursor" workflows — which is a much larger product bet.
+
+**If you're reading this in a future session:** do not build the AI Brief unless Noah has explicitly greenlit it based on post-launch feedback. Check with Noah first.
 
 ---
 
@@ -193,6 +281,68 @@ Four levels: Critical / High / Medium (default) / Low.
 ## Sprint 13 — Element Screenshot
 
 - Capture via `chrome.tabs.captureVisibleTab` cropped to `boundingRect`. Visual context beats all text.
+
+---
+
+## Known Code Issues — Pending Fix
+
+These are confirmed bugs in the current codebase as of Sprint 11 Pass 18, verified against actual source files. Address in the next code pass.
+
+| # | File | Issue | Impact |
+|---|---|---|---|
+| 1 | `sidebar.js` ~2459 | PDF export template still calls `@import url('https://fonts.googleapis.com/css2?...')` — external network call, breaks offline/privacy environments | Medium — PDF not self-contained |
+| 2 | `sidebar.js` `persistAllNotes()` | Writes to orphaned `markup_all_notes` storage key that nothing reads — wastes quota | Low — silent, no UX impact |
+| 3 | `sidebar.js` | `isMultiUrl` declared 5× across brief-building functions, never referenced after declaration | Low — dead code only |
+| 4 | `sidebar.js` `settingsClearAllBtn` | Settings "Clear All Notes" uses browser-native `confirm()` and only clears current page's notes, not domain-wide — inconsistent with inline clear-all behavior | Medium — UX inconsistency |
+
+---
+
+## End of Sprint Protocol — Run Every Sprint Without Exception
+
+Run every item below before calling a sprint done.
+
+### 1. Git
+- [ ] All src/ changes staged and committed: `feat: sprint [N] — [one line summary]`
+- [ ] Pushed to origin main
+- [ ] Clean working tree: `git status` shows nothing to commit
+
+### 2. QA
+- [ ] Core loop tested: note-taking → save → generate brief → export
+- [ ] Tested in both Simple Mode and Dev Mode
+- [ ] Tested on at least 2 URLs (one localhost or file://, one live https://)
+- [ ] No console errors on clean load
+
+### 3. Docs (do not skip)
+- [ ] CHANGELOG.md updated
+- [ ] CLAUDE.md **Current Sprint** line updated (top of file)
+- [ ] CLAUDE.md **Sprint History table** updated with new row
+- [ ] CLAUDE.md **Known Code Issues** updated — bugs fixed removed, new bugs added
+- [ ] Any changed skill files in `.claude/skills/` updated to match new behavior
+- [ ] Storage Keys table updated if any new keys were added
+- [ ] Note Data Model updated if any fields changed
+
+### 4. Self-Review
+- [ ] Open Markup on a real site and use it to review something
+- [ ] Generate a brief from that session
+- [ ] Any bugs found go into Known Code Issues before closing
+
+---
+
+## SYNC PROTOCOL — How to Keep This File Current
+
+**Why it fell out of sync:** CLAUDE.md was written once at Sprint 9 and never updated across 18+ passes because each Claude Code session ran a pass and moved on without a documentation step.
+
+**The rule going forward:** At the end of every sprint (not every pass), Claude must update this file before the session closes. Specifically:
+
+- **Sprint History table** — add the sprint row with a one-line summary of what shipped
+- **Current Sprint** — update the sprint number and pass at the top
+- **Note Data Model** — update if any fields were added, removed, or changed
+- **Storage Keys** — update if any new keys were added
+- **Key Architectural Decisions** — add a bullet if a new pattern was established
+- **Known Code Issues** — add confirmed bugs, remove fixed ones
+- **Skill files** (`.claude/skills/*.md`) — update the relevant skill file whenever the feature it documents changes significantly
+
+**For future projects:** Apply this same structure from the start. Keep one CLAUDE.md per project. Never duplicate context between a parent folder file and a project file — the project file is the source of truth. The parent folder file (if any) should only say "this folder contains [project] at [path]" and nothing else.
 
 ---
 

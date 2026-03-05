@@ -32,7 +32,7 @@ const SEVERITY_CONFIG = {
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 
 // ─── Storage quota constants (Sprint 8 F4) ─────────────────────
-const QUOTA_WARN_BYTES  = 4 * 1024 * 1024;   // 4 MB — show amber warning
+const QUOTA_WARN_BYTES  = Math.round((chrome.storage.local.QUOTA_BYTES || 10 * 1024 * 1024) * 0.8);
 
 // ─── Brief title ───────────────────────────────────────────────
 function getBriefTitle() {
@@ -89,6 +89,7 @@ let devMode               = false; // Sprint 9: Developer Mode (false = Simple M
 let iframeNoticeDismissed = false; // Sprint 9: show iframe notice only once
 
 // ─── Sprint 11 Pass 10: Image paste state ──────────────────────
+let locationHoverPreview  = false; // true when location value is a hover preview, not confirmed
 let imageDirHandle        = null;  // FileSystemDirectoryHandle (IndexedDB)
 let currentImagePath      = null;  // filename for image on current note
 let currentImageThumbnail = null;  // base64 JPEG data URL for display
@@ -344,7 +345,15 @@ function applyDevMode(enabled) {
   if (devBadgeEl) {
     devBadgeEl.textContent = enabled ? "DEV MODE" : "SIMPLE MODE";
     devBadgeEl.hidden = false;
+    devBadgeEl.classList.toggle("mode-chip--dev", enabled);
   }
+  if (locationInput) {
+    locationInput.placeholder = enabled
+      ? "e.g. .hero-section, #checkout-btn"
+      : "e.g. Hero section, checkout button";
+  }
+  // Selector chip row is always hidden — location field is the single field
+  selectorRow.hidden = true;
   // Show/hide sort toggle (only meaningful in Developer Mode)
   if (briefSortToggleEl) briefSortToggleEl.hidden = !enabled;
   // Show/hide type and severity pickers
@@ -365,15 +374,10 @@ function applyDevMode(enabled) {
   // Simple Mode: SCREENSHOT + GENERATE BRIEF side by side (no SELECT ELEMENT)
   const bottomRow = document.querySelector(".bottom-btn-row");
   if (bottomRow) bottomRow.classList.toggle("bottom-btn-row--simple", !enabled);
-  // In simple mode, always hide selector-row regardless.
+  // In simple mode, clear any active selector state.
   if (!enabled) {
-    selectorRow.hidden = true;
     currentSelector = null;
     currentElementLabel = null;
-    if (selectorDisplay) {
-      selectorDisplay.textContent = "Hover to preview element";
-      selectorDisplay.className = "selector-chip selector-chip--empty";
-    }
     updateClearSelectorVisibility();
   }
   // Re-render notes to show/hide type/severity badges
@@ -486,14 +490,6 @@ function setToggleState(active) {
     toggleBtn.setAttribute("aria-pressed", "true");
     toggleBtn.setAttribute("aria-label", "STOP SELECTING — deactivate element selection");
     if (escSelectHintEl) escSelectHintEl.hidden = false;
-    // In dev mode, show selector row; in simple mode, keep it hidden
-    if (devMode) {
-      selectorRow.hidden = false;
-      if (!currentSelector) {
-        selectorDisplay.textContent = "Hover to preview element";
-        selectorDisplay.className = "selector-chip selector-chip--empty";
-      }
-    }
   } else {
     toggleBtn.textContent = "SELECT ELEMENT";
     toggleBtn.classList.remove("toggle-btn--on");
@@ -567,6 +563,12 @@ async function sendToggle() {
   // Suppress the ELEMENT_DESELECTED that deactivate() fires via clearSelection()
   // so flushSave() is not called when the user clicks SELECT ELEMENT to turn off.
   if (markupActive) ignoreNextDeselect = true;
+  // Fix 1A: cancel active screenshot mode when turning element select ON
+  if (!markupActive && screenshotBtn && screenshotBtn.classList.contains("btn-screenshot--active")) {
+    chrome.tabs.sendMessage(tab.id, { type: "EXIT_SCREENSHOT_MODE" }).catch(() => {});
+    screenshotBtn.classList.remove("btn-screenshot--active");
+    screenshotBtn.textContent = "SCREENSHOT";
+  }
   chrome.tabs.sendMessage(tab.id, { type: msgType });
 }
 
@@ -1079,6 +1081,25 @@ function updateBadge() {
   }).catch(() => {}); // background may be sleeping
 }
 
+// ─── Thumbnail downscaler (Pass 22b) ───────────────────────────
+function downscaleThumbnail(dataUrl, maxWidth = 400) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 // ─── Sprint 8 F4: Storage quota check ─────────────────────────
 async function checkStorageQuota() {
   try {
@@ -1475,9 +1496,12 @@ function resetForm() {
   isEditing           = false;
   editPrevSelector    = null;
   noteInput.value     = "";
-  if (locationInput) locationInput.value = "";
+  if (locationInput) {
+    locationInput.value = "";
+    locationInput.classList.remove("location-input--preview");
+  }
+  locationHoverPreview = false;
   selectorRow.hidden  = true;
-  selectorDisplay.textContent = "";
   saveBtn.textContent = "SAVE NOTE";
   resetTypePicker();
   resetSeverityPicker();
@@ -1499,8 +1523,9 @@ function deactivateReset() {
   currentNoteId       = null;
   isEditing           = false;
   editPrevSelector    = null;
+  if (locationInput) locationInput.classList.remove("location-input--preview");
+  locationHoverPreview = false;
   selectorRow.hidden  = true;
-  selectorDisplay.textContent = "";
   saveBtn.textContent = "SAVE NOTE";
   // Intentionally NOT resetting type/severity pickers — user's choice is preserved across deactivation.
   updateClearSelectorVisibility();
@@ -1544,13 +1569,6 @@ function enterEditMode(note) {
   if (locationInput) locationInput.value = note.location || "";
   setTypePicker(note.type);
   setSeverityPicker(note.severity || "medium");
-  // Sprint 9 (F1): only show selector row in dev mode
-  if (devMode) {
-    selectorRow.hidden = false;
-    const hasSelector = !!note.selector;
-    selectorDisplay.textContent = note.selector || "Hover to preview element";
-    selectorDisplay.className = `selector-chip ${hasSelector ? "selector-chip--filled" : "selector-chip--empty"}`;
-  }
   saveBtn.textContent = "UPDATE NOTE";
   if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to update · Esc to cancel";
   updateClearSelectorVisibility();
@@ -1584,7 +1602,6 @@ function exitEditMode() {
   resetTypePicker();
   resetSeverityPicker();
   saveBtn.textContent = "SAVE NOTE";
-  selectorDisplay.textContent = currentSelector || "Hover to preview element";
   if (saveHintEl) saveHintEl.textContent = "Cmd+Enter to save";
   updateClearSelectorVisibility();
   // Sprint 11 Pass 10: clear image state on exit edit
@@ -1647,6 +1664,13 @@ noteInput.addEventListener("keydown", (e) => {
   }
 });
 
+// Clear hover preview when user edits location field
+if (locationInput) {
+  locationInput.addEventListener("input", () => {
+    locationHoverPreview = false;
+  });
+}
+
 // Cmd+Enter / Ctrl+Enter from location field also saves
 if (locationInput) {
   locationInput.addEventListener("keydown", (e) => {
@@ -1690,8 +1714,7 @@ clearSelectorBtn.addEventListener("click", async () => {
   currentElementLabel  = null;
   currentParentContext = null;
   currentElementRole   = null;
-  selectorDisplay.textContent = "Hover to preview element";
-  selectorDisplay.className = "selector-chip selector-chip--empty"; // Sprint 9 (2i)
+  if (locationInput) locationInput.value = "";
   updateClearSelectorVisibility();
 });
 
@@ -1709,7 +1732,8 @@ noteInput.addEventListener("paste", async (e) => {
   const filename = `markup-${hostname}-${Date.now()}.png`;
 
   // Read full-resolution data URL directly — no canvas resize (task 1: image quality)
-  const thumbUrl = await readArrayBufferAsDataUrl(arrayBuffer, imageFile.type);
+  const fullUrl = await readArrayBufferAsDataUrl(arrayBuffer, imageFile.type);
+  const thumbUrl = await downscaleThumbnail(fullUrl);
   currentImageThumbnail = thumbUrl;
 
   if (!imageDirHandle) {
@@ -1825,11 +1849,40 @@ if (screenshotBtn) {
       } catch { return; }
     }
 
+    // Fix 1B: cancel active element selection when entering screenshot mode
+    if (markupActive) {
+      ignoreNextDeselect = true;
+      chrome.tabs.sendMessage(currentTabId, { type: "MARKUP_DEACTIVATE" }).catch(() => {});
+      markupActive = false;
+      if (toggleBtn) {
+        toggleBtn.setAttribute("aria-pressed", "false");
+        toggleBtn.classList.remove("toggle-btn--on");
+      }
+    }
     screenshotBtn.classList.add("btn-screenshot--active");
     screenshotBtn.textContent = "CANCEL";
     chrome.tabs.sendMessage(currentTabId, { type: "ENTER_SCREENSHOT_MODE" }).catch(() => {});
   });
 }
+
+// Fix 1B + Fix 2: Esc from sidebar panel exits screenshot mode or deactivates element selection
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!currentTabId) return;
+  if (screenshotBtn && screenshotBtn.classList.contains("btn-screenshot--active")) {
+    chrome.tabs.sendMessage(currentTabId, { type: "EXIT_SCREENSHOT_MODE" }).catch(() => {});
+    screenshotBtn.classList.remove("btn-screenshot--active");
+    screenshotBtn.textContent = "SCREENSHOT";
+  } else if (markupActive) {
+    chrome.tabs.sendMessage(currentTabId, { type: "MARKUP_DEACTIVATE" }).catch(() => {});
+    markupActive = false;
+    if (toggleBtn) toggleBtn.setAttribute("aria-pressed", "false");
+    if (toggleBtn) toggleBtn.classList.remove("toggle-btn--on");
+    if (escSelectHintEl) escSelectHintEl.hidden = true;
+    selectorRow.hidden = true;
+    updateClearSelectorVisibility();
+  }
+});
 
 // Remove image preview × button
 if (imagePreviewRemoveBtn) {
@@ -1885,11 +1938,6 @@ notePendingSaveBtn.addEventListener("click", async () => {
     currentParentContext = parentCtx;
     currentElementRole   = elemRole;
     currentNoteId        = null;
-    if (devMode) {
-      selectorRow.hidden = false;
-      selectorDisplay.textContent = sel;
-      selectorDisplay.className = "selector-chip selector-chip--filled";
-    }
     if (locationInput && !locationInput.value.trim()) {
       locationInput.value = devMode ? (sel || "") : (label || "");
     }
@@ -1917,11 +1965,6 @@ notePendingDiscardBtn.addEventListener("click", () => {
     currentElementLabel  = label;
     currentParentContext = parentCtx;
     currentElementRole   = elemRole;
-    if (devMode) {
-      selectorRow.hidden = false;
-      selectorDisplay.textContent = sel;
-      selectorDisplay.className = "selector-chip selector-chip--filled";
-    }
     if (locationInput && !locationInput.value.trim()) {
       locationInput.value = devMode ? (sel || "") : (label || "");
     }
@@ -2144,8 +2187,8 @@ function buildBriefPanelHtml() {
   const sevSummary = SEVERITY_ORDER.map((s) => `${sevCounts[s]} ${SEVERITY_CONFIG[s].label}`).join(" · ");
 
   let html = `<h1>${escapeHtml(getBriefTitle())}</h1>`;
-  html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
-  html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Project:</strong> <span class="brief-inline-edit" id="brief-edit-project" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Session name">${escapeHtml(project)}</span></p>`;
+  html += `<p class="brief-meta-line"><strong>Domain:</strong> <span class="brief-inline-edit" id="brief-edit-domain" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Domain">${escapeHtml(domainName)}</span></p>`;
   html += `<p class="brief-meta-line"><strong>Reviewed:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
   html += `<p class="brief-meta-line"><strong>Total Issues:</strong> ${allBriefNotes.length}</p>`;
   html += `<p class="brief-meta-line"><strong>Severity:</strong> ${escapeHtml(sevSummary)}</p>`;
@@ -2160,7 +2203,7 @@ function buildBriefPanelHtml() {
         const sevNotes = notesArr.filter((n) => (n.severity || "medium") === sev);
         if (sevNotes.length === 0) continue;
         const cfg = SEVERITY_CONFIG[sev];
-        html += `<h3>${cfg.emoji} ${cfg.label} (${sevNotes.length})</h3>`;
+        html += `<h3>${cfg.label} (${sevNotes.length})</h3>`;
         const sorted = [...sevNotes].sort(
           (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
         );
@@ -2195,8 +2238,8 @@ function buildSimpleBriefPanelHtml() {
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
 
   let html = `<h1>${escapeHtml(getBriefTitle())}</h1>`;
-  html += `<p class="brief-meta-line"><strong>Project:</strong> ${escapeHtml(project)}</p>`;
-  html += `<p class="brief-meta-line"><strong>Domain:</strong> ${escapeHtml(domainName)}</p>`;
+  html += `<p class="brief-meta-line"><strong>Project:</strong> <span class="brief-inline-edit" id="brief-edit-project" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Session name">${escapeHtml(project)}</span></p>`;
+  html += `<p class="brief-meta-line"><strong>Domain:</strong> <span class="brief-inline-edit" id="brief-edit-domain" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Domain">${escapeHtml(domainName)}</span></p>`;
   html += `<p class="brief-meta-line"><strong>Date:</strong> ${escapeHtml(dateStr)} at ${escapeHtml(timeStr)}</p>`;
   html += `<p class="brief-meta-line"><strong>Notes:</strong> ${allBriefNotes.length}</p>`;
   html += `<hr>`;
@@ -2349,279 +2392,209 @@ downloadZipBtn.addEventListener("click", async () => {
   }
 });
 
-// ─── Export as HTML report (Sprint 10) ────────────────────────
-// Pass 8: domain-wide — uses briefDomainGroups collected by showBrief()
-downloadHtmlBtn.addEventListener("click", async () => {
-  const dateStr = new Date().toISOString().slice(0, 10);
-  let domain = currentNoteUrl;
-  try { domain = new URL(currentNoteUrl).hostname; } catch { /* use full url */ }
+// ─── generateHtmlReport — full HTML page for PDF rendering ───────
+function generateHtmlReport() {
+  // Use the currently rendered brief content (captures any inline edits)
+  const content = document.getElementById("brief-content")?.innerHTML || buildBriefPanelHtml();
 
-  const project = sessionTitle || tabTitle || domain;
-  const mode = devMode ? "Developer Mode" : "Simple Mode";
-  const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
-  const isMultiUrl = briefDomainGroups.length > 1;
+  // Resolve self-hosted font URLs for PDF
+  const fontDmSans400    = chrome.runtime.getURL("fonts/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2");
+  const fontPlayfair400i = chrome.runtime.getURL("fonts/nuFkD-vYSZviVYUb_rj3ij__anPXDTnogkk7yRZrPA.woff2");
+  const fontDmMono400    = chrome.runtime.getURL("fonts/aFTU7PB1QTsUX8KYthqQBK6PYK0.woff2");
 
-  // Sprint 11 Pass 10: pre-load all images from folder as base64 for inline embedding
-  const imageMap = {}; // filename → data URL
-  if (imageDirHandle) {
-    const allNotes2 = briefDomainGroups.flatMap((g) => g.notes);
-    await Promise.all(allNotes2.map(async (note) => {
-      if (note.imagePath && !imageMap[note.imagePath]) {
-        try { imageMap[note.imagePath] = await readImageAsBase64(note.imagePath); } catch { /* skip */ }
-      }
-    }));
-  }
-
-  function buildNoteEntryHtml(note, sev) {
-    const typeCfg = TYPE_BRIEF[note.type] || TYPE_BRIEF.general;
-    const selectorLine = note.selector
-      ? `<div class="note-selector">${escapeHtml(note.selector)}</div>` : "";
-    const typeChip = `<span class="type-chip">${escapeHtml(typeCfg.label)}</span>`;
-    const imgSrc = note.imagePath ? (imageMap[note.imagePath] || note.imageThumbnail || null) : (note.imageThumbnail || null);
-    const imgHtml = imgSrc ? `<img class="note-image" src="${imgSrc}" alt="Screenshot" />` : "";
-    return `      <div class="note-entry ${escapeHtml(sev)}">
-        ${selectorLine}${typeChip}
-        <div class="note-body">${escapeHtml(note.text)}</div>
-        ${imgHtml}
-      </div>`;
-  }
-
-  function buildDevSectionsForGroup(notesArr) {
-    return SEVERITY_ORDER.map((sev) => {
-      const sevNotes = notesArr.filter((n) => (n.severity || "medium") === sev);
-      if (sevNotes.length === 0) return "";
-      const cfg = SEVERITY_CONFIG[sev];
-      const sorted = [...sevNotes].sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type));
-      const noteItems = sorted.map((note) => buildNoteEntryHtml(note, sev)).join("\n");
-      return `    <div class="section-header">${cfg.emoji} ${cfg.label} (${sevNotes.length})</div>\n${noteItems}`;
-    }).filter(Boolean).join("\n");
-  }
-
-  function buildSimpleSectionsForGroup(notesArr) {
-    const sorted = [...notesArr].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    return sorted.map((note) => {
-      const tsStr = note.createdAt
-        ? new Date(note.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-        : "";
-      const imgSrc2 = note.imagePath ? (imageMap[note.imagePath] || note.imageThumbnail || null) : (note.imageThumbnail || null);
-      const imgHtml2 = imgSrc2 ? `<img class="note-image" src="${imgSrc2}" alt="Screenshot" />` : "";
-      return `    <div class="note-entry-simple">
-      ${tsStr ? `<div class="simple-ts">${escapeHtml(tsStr)}</div>` : ""}
-      <div class="note-body">${escapeHtml(note.text)}</div>
-      ${note.location ? `<div class="simple-location">${escapeHtml(note.location)}</div>` : ""}
-      ${imgHtml2}
-    </div>`;
-    }).join("\n");
-  }
-
-  let reportTitle = "";
-  let summaryChipsHtml = "";
-  let noteCountMetaHtml = "";
-  let sectionsHtml = "";
-
-  if (devMode) {
-    reportTitle = "Markup Report";
-
-    const sevCounts = {};
-    for (const s of SEVERITY_ORDER) {
-      sevCounts[s] = allBriefNotes.filter((n) => (n.severity || "medium") === s).length;
-    }
-    summaryChipsHtml = `<div class="severity-summary">\n    ${SEVERITY_ORDER
-      .filter((s) => sevCounts[s] > 0)
-      .map((s) => {
-        const cfg = SEVERITY_CONFIG[s];
-        return `<span class="severity-chip chip-${s}">${sevCounts[s]} ${cfg.label}</span>`;
-      })
-      .join("\n    ")}\n  </div>`;
-
-    sectionsHtml = briefDomainGroups.map((group) => {
-      const pathLabel = getBriefPathLabel(group.url);
-      return `  <div class="url-section-header">${escapeHtml(pathLabel)}</div>\n${buildDevSectionsForGroup(group.notes)}`;
-    }).join("\n");
-  } else {
-    // Simple Mode — chronological, no severity grouping
-    reportTitle = "Markup — Feedback";
-    noteCountMetaHtml = `<p class="report-meta">${allBriefNotes.length} note${allBriefNotes.length === 1 ? "" : "s"}</p>`;
-
-    sectionsHtml = briefDomainGroups.map((group) => {
-      const pathLabel = getBriefPathLabel(group.url);
-      return `  <div class="url-section-header">${escapeHtml(pathLabel)}</div>\n${buildSimpleSectionsForGroup(group.notes)}`;
-    }).join("\n");
-  }
-
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width">
-  <title>markup-report-${domain}-${dateStr}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap');
-    body {
-      font-family: 'DM Sans', -apple-system, sans-serif;
-      background: #F5F0E8;
-      color: #0D0D0D;
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 40px 24px;
-    }
-    .report-header {
-      border-bottom: 2px solid #C9A84C;
-      padding-bottom: 16px;
-      margin-bottom: 24px;
-    }
-    .report-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1A2744;
-      margin: 0 0 4px 0;
-    }
-    .report-meta {
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      color: #6B7A99;
-      margin: 2px 0 0 0;
-    }
-    .severity-summary {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
-    .severity-chip {
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-    }
-    .chip-critical { background: #B91C1C; color: white; }
-    .chip-high     { background: #C2410C; color: white; }
-    .chip-medium   { background: #1A2744; color: white; }
-    .chip-low      { background: transparent; border: 1px solid #6B7A99; color: #6B7A99; }
-    .section-header {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #1A2744;
-      border-top: 1px solid rgba(107,122,153,0.2);
-      padding-top: 16px;
-      margin: 24px 0 12px 0;
-    }
-    .note-entry {
-      background: #FAF8F3;
-      border: 1px solid rgba(201,168,76,0.2);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .note-entry.critical { border-left: 3px solid #B91C1C; }
-    .note-entry.high     { border-left: 3px solid #C2410C; }
-    .note-entry.medium   { border-left: 3px solid #1A2744; }
-    .note-entry.low      { border-left: 3px solid #6B7A99; }
-    .note-selector {
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      color: #6B7A99;
-      margin-bottom: 6px;
-    }
-    .type-chip {
-      display: inline-block;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      background: rgba(26,39,68,0.08);
-      color: #1A2744;
-      padding: 2px 6px;
-      border-radius: 3px;
-      margin-bottom: 6px;
-    }
-    .note-body {
-      font-family: Lora, Georgia, serif;
-      font-size: 15px;
-      line-height: 1.6;
-      color: #0D0D0D;
-    }
-    .note-entry-simple {
-      background: #FAF8F3;
-      border: 1px solid rgba(201,168,76,0.2);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .simple-ts {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: #6B7A99;
-      margin-bottom: 6px;
-    }
-    .simple-location {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: #6B7A99;
-      margin-top: 6px;
-    }
-    .url-section-header {
-      font-size: 14px;
-      font-weight: 700;
-      color: #1A2744;
-      border-top: 2px solid rgba(201,168,76,0.4);
-      padding-top: 20px;
-      margin: 32px 0 16px 0;
-      font-family: 'DM Mono', monospace;
-      letter-spacing: 0.04em;
-    }
-    .report-logotype {
-      font-family: 'Playfair Display', Georgia, serif;
-      font-style: italic;
-      font-size: 20px;
-      font-weight: 400;
-      color: #C9A84C;
-      letter-spacing: -0.01em;
-      margin-bottom: 10px;
-    }
-    .note-image {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      height: auto;
-      border-radius: 6px;
-      margin-top: 12px;
-    }
-    .report-footer {
-      margin-top: 48px;
-      padding-top: 16px;
-      border-top: 1px solid rgba(107,122,153,0.2);
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: #6B7A99;
-      text-align: center;
-    }
-    @media print { .report-footer { page-break-inside: avoid; } }
-  </style>
-  <script>window.addEventListener('load', function() { window.print(); });<\/script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('${fontDmSans400}') format('woff2');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  src: url('${fontDmSans400}') format('woff2');
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: italic;
+  font-weight: 400;
+  src: url('${fontPlayfair400i}') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('${fontDmMono400}') format('woff2');
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #0D0D0D;
+  background: #FFFEF9;
+  padding: 32px 40px;
+}
+.pdf-logotype {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+  color: #c9a84c;
+  margin-bottom: 24px;
+  letter-spacing: 0.01em;
+}
+code, .brief-selector-ref, .brief-selector-ref code, .brief-selector-text, .brief-meta-line, .brief-url-header, .brief-severity-chip, .brief-type-chip, .brief-role-chip, .brief-parent-context, .brief-element-label__key {
+  font-family: 'DM Mono', monospace;
+}
+h1 { font-size: 22px; font-weight: 700; color: #1A2744; margin-bottom: 12px; }
+h2 { font-size: 13px; font-weight: 600; color: #2D4A8A; margin: 20px 0 6px; letter-spacing: 0.06em; text-transform: uppercase; font-family: monospace; }
+h3 { font-size: 13px; font-weight: 600; color: #1A2744; margin: 16px 0 6px; }
+hr { border: none; border-top: 1px solid rgba(201,168,76,0.3); margin: 12px 0; }
+.brief-meta-line { font-size: 11px; color: #6B7A99; font-family: monospace; line-height: 1.8; }
+.brief-url-header { font-family: monospace; font-size: 11px; font-weight: 600; color: #1A2744; text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 4px; }
+.brief-entry-card { margin: 8px 0; padding: 8px 0; border-bottom: 1px solid rgba(201,168,76,0.15); }
+.brief-entry-chips { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+.brief-severity-chip { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.brief-severity-chip--critical { background: #B91C1C; color: #fff; }
+.brief-severity-chip--high     { background: #C2410C; color: #fff; }
+.brief-severity-chip--medium   { background: #1A2744; color: #fff; }
+.brief-severity-chip--low      { background: transparent; border: 1px solid #6B7A99; color: #6B7A99; }
+.brief-type-chip { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid rgba(201,168,76,0.3); border-radius: 3px; font-family: monospace; font-size: 10px; text-transform: uppercase; color: #6B7A99; }
+.brief-role-chip { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid rgba(107,122,153,0.3); border-radius: 3px; font-family: monospace; font-size: 10px; color: #9AA3B8; }
+.brief-location-label { font-size: 13px; font-weight: 500; color: #0D0D0D; margin: 4px 0 2px; }
+.brief-selector-ref { font-family: monospace; font-size: 11px; color: #6B7A99; margin: 1px 0 4px; }
+.brief-selector-ref code { font-family: monospace; font-size: 11px; color: #6B7A99; }
+.brief-selector-text { display: block; font-family: monospace; font-size: 11px; color: #6B7A99; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brief-element-label { font-size: 11px; font-style: italic; color: #6B7A99; margin-bottom: 2px; }
+.brief-element-label__key { font-style: normal; font-family: monospace; font-size: 10px; opacity: 0.6; margin-right: 2px; }
+.brief-parent-context { font-family: monospace; font-size: 10px; color: #9AA3B8; margin-bottom: 4px; }
+.brief-note-body { font-size: 13px; color: #0D0D0D; line-height: 1.5; margin-top: 4px; }
+.brief-note-image { display: block; width: 85%; max-width: 85%; height: auto; margin-top: 12px; border-radius: 4px; border: 1px solid rgba(201,168,76,0.2); }
+.brief-simple-entry { margin: 8px 0; padding: 8px 0; border-bottom: 1px solid rgba(201,168,76,0.15); }
+.brief-simple-location { font-family: monospace; font-size: 11px; color: #6B7A99; margin-bottom: 4px; }
+</style>
 </head>
 <body>
-  <div class="report-header">
-    <div class="report-logotype">Markup</div>
-    <h1 class="report-title">${escapeHtml(reportTitle)}</h1>
-    <p class="report-meta">${escapeHtml(domain)} &middot; ${dateStr} &middot; ${escapeHtml(mode)}</p>
-    <p class="report-meta">${escapeHtml(project)}</p>
-    ${noteCountMetaHtml}
-  </div>
-  ${summaryChipsHtml}
-  ${sectionsHtml}
-  <div class="report-footer">Generated by Markup &middot; getmarkup.dev</div>
+<div class="pdf-logotype">Markup</div>
+${content}
+<p style="font-family:'DM Mono',monospace;font-size:10px;color:#9AA3B8;margin-top:32px;">Generated by Markup · getmarkup.dev</p>
 </body>
 </html>`;
+}
 
-  const blob = new Blob([html], { type: "text/html" });
-  const blobUrl = URL.createObjectURL(blob);
-  await chrome.tabs.create({ url: blobUrl });
-  // blobUrl stays alive until the tab loads — do not revoke immediately
+// ─── Export as PDF via html2canvas + jsPDF (Pass 20) ─────────────
+downloadHtmlBtn.addEventListener("click", async () => {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    showToast("PDF unavailable — try Export MD + Images instead");
+    return;
+  }
+  if (!window.html2canvas) {
+    showToast("PDF renderer not loaded — try Export MD + Images instead");
+    return;
+  }
+
+  const allDomainNotes = briefDomainGroups.flatMap((g) => g.notes);
+  if (allDomainNotes.length === 0) {
+    showToast("No notes to export");
+    return;
+  }
+
+  const html = generateHtmlReport();
+
+  // Create hidden iframe to render the report at a wider width
+  const iframe = document.createElement("iframe");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    top: "-9999px",
+    left: "-9999px",
+    width: "900px",
+    height: "1px",
+    border: "none",
+    visibility: "hidden",
+  });
+  document.body.appendChild(iframe);
+
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+
+  // Wait for images to load
+  await new Promise((resolve) => {
+    const imgs = iframe.contentDocument.querySelectorAll("img");
+    if (!imgs.length) { resolve(); return; }
+    let loaded = 0;
+    const done = () => { if (++loaded === imgs.length) resolve(); };
+    imgs.forEach((img) => {
+      if (img.complete) done();
+      else { img.onload = done; img.onerror = done; }
+    });
+    setTimeout(resolve, 3000); // fallback
+  });
+
+  // Adjust iframe height to full content
+  const body = iframe.contentDocument.body;
+  iframe.style.height = body.scrollHeight + "px";
+  await new Promise((r) => setTimeout(r, 100)); // allow reflow
+
+  try {
+    const canvas = await window.html2canvas(body, {
+      scale: 1.5,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#FFFEF9",
+      width: 900,
+      windowWidth: 900,
+    });
+
+    document.body.removeChild(iframe);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+    const ratio = pageW / imgW;
+    const scaledH = imgH * ratio;
+
+    let yOffset = 0;
+    let pagesAdded = 0;
+
+    while (yOffset < scaledH) {
+      if (pagesAdded > 0) doc.addPage();
+      const srcY = yOffset / ratio;
+      const srcH = Math.min(pageH / ratio, imgH - srcY);
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = imgW;
+      pageCanvas.height = Math.ceil(srcH);
+      const ctx = pageCanvas.getContext("2d");
+      ctx.drawImage(canvas, 0, Math.floor(srcY), imgW, Math.ceil(srcH), 0, 0, imgW, Math.ceil(srcH));
+      const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
+      const sliceH = Math.ceil(srcH) * ratio;
+      doc.addImage(imgData, "JPEG", 0, 0, pageW, sliceH);
+      yOffset += pageH;
+      pagesAdded++;
+    }
+
+    const briefDomain = document.getElementById("brief-edit-domain")?.textContent?.trim() || (() => {
+      try { return new URL(currentNoteUrl).hostname; } catch { return "brief"; }
+    })();
+    const today = new Date().toISOString().split("T")[0];
+    doc.save(`markup-brief-${briefDomain}-${today}.pdf`);
+
+  } catch (err) {
+    if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    console.error("Markup: PDF export failed", err);
+    showToast("PDF export failed — try Export MD + Images instead");
+  }
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
@@ -2860,7 +2833,32 @@ chrome.runtime.onMessage.addListener((message) => {
     setToggleState(false);
   }
 
+  if (message.type === "ELEMENT_HOVERED") {
+    if (locationInput && !locationInput.value.trim()) {
+      const previewValue = devMode
+        ? (message.selector || "")
+        : (message.elementLabel || message.selector || "");
+      if (previewValue) {
+        locationInput.value = previewValue;
+        locationInput.classList.add("location-input--preview");
+        locationHoverPreview = true;
+      }
+    }
+  }
+
+  if (message.type === "ELEMENT_HOVER_END") {
+    if (locationInput && locationHoverPreview) {
+      locationInput.value = "";
+      locationInput.classList.remove("location-input--preview");
+      locationHoverPreview = false;
+    }
+  }
+
   if (message.type === "ELEMENT_SELECTED") {
+    // Clear hover preview — user confirmed an element
+    locationHoverPreview = false;
+    if (locationInput) locationInput.classList.remove("location-input--preview");
+
     if (noteInput.value.trim() && !currentNoteId && !isEditing) {
       pendingElementSelector = message.selector;
       pendingElementLabel    = message.elementLabel  || null;
@@ -2874,15 +2872,9 @@ chrome.runtime.onMessage.addListener((message) => {
     currentElementLabel  = message.elementLabel  || null;
     currentParentContext = message.parentContext  || null;
     currentElementRole   = message.elementRole   || null;
-    // Pass 11: pre-populate location field in both modes if not already set by user
+    // Pre-populate location field: dev mode shows selector, simple mode shows label
     if (locationInput && !locationInput.value.trim()) {
       locationInput.value = devMode ? (currentSelector || "") : (currentElementLabel || "");
-    }
-    // Sprint 9 (F1 + 2i): only show selector chip in dev mode; add filled class
-    if (devMode) {
-      selectorRow.hidden  = false;
-      selectorDisplay.textContent = message.selector;
-      selectorDisplay.className = "selector-chip selector-chip--filled";
     }
     // Do NOT clear noteInput — preserve any unsaved text
     // Do NOT reset isEditing or currentNoteId — preserve edit mode state
@@ -2901,25 +2893,7 @@ chrome.runtime.onMessage.addListener((message) => {
     currentElementLabel  = null;
     currentParentContext = null;
     currentElementRole   = null;
-    selectorDisplay.textContent = "Hover to preview element";
-    selectorDisplay.className = "selector-chip selector-chip--empty";
     updateClearSelectorVisibility();
-  }
-
-  if (message.type === "ELEMENT_HOVERED") {
-    // Sprint 9 (F1 + 2i): only show selector in dev mode; use empty chip class
-    if (!currentSelector && devMode) {
-      selectorRow.hidden = false;
-      selectorDisplay.textContent = message.selector;
-      selectorDisplay.className = "selector-chip selector-chip--empty";
-    }
-  }
-
-  if (message.type === "ELEMENT_HOVER_END") {
-    if (!currentSelector) {
-      selectorDisplay.textContent = "Hover to preview element";
-      selectorDisplay.className = "selector-chip selector-chip--empty";
-    }
   }
 
   // Sprint 10: Floating note input — submitted from in-page overlay
@@ -2992,7 +2966,7 @@ chrome.runtime.onMessage.addListener((message) => {
           try { hostname = new URL(currentNoteUrl).hostname.replace(/[^a-z0-9-]/gi, "-") || "markup"; } catch { /* */ }
           const filename = `markup-${hostname}-${Date.now()}.png`;
 
-          currentImageThumbnail = dataUrl;
+          currentImageThumbnail = await downscaleThumbnail(dataUrl);
 
           if (!imageDirHandle) {
             pendingImageBuffer   = dataUrlToArrayBuffer(dataUrl);
