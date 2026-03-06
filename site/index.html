@@ -69,6 +69,10 @@
       transition: color var(--tr);
     }
     .nav-link:hover { color: rgba(255,255,255,0.9); }
+    .nav-link:focus-visible {
+      outline: 2px solid var(--gold); outline-offset: 3px;
+      color: rgba(255,255,255,0.9); border-radius: var(--r);
+    }
     .nav-cta {
       font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
       color: var(--ink); background: var(--gold); text-decoration: none;
@@ -76,15 +80,23 @@
       transition: opacity var(--tr), transform var(--tr);
     }
     .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+    .nav-cta:focus-visible {
+      outline: 2px solid var(--gold); outline-offset: 3px;
+    }
 
     /* ── HERO ───────────────────────────────────────────────────── */
     .hero {
       min-height: 100vh;
       background: var(--deep-blue);
       display: flex; align-items: center;
+      justify-content: center;
       padding: 110px 48px 80px;
-      gap: 64px;
       position: relative; overflow: hidden;
+    }
+    .hero-inner {
+      max-width: 1200px; width: 100%; margin: 0 auto;
+      display: flex; align-items: center;
+      gap: 64px; position: relative; z-index: 1;
     }
     .hero::before {
       content: '';
@@ -136,17 +148,23 @@
       transition: color var(--tr), border-color var(--tr);
     }
     .btn-ghost:hover { color: var(--warm-white); border-color: rgba(250,248,243,0.45); }
+    .btn-gold:focus-visible,
+    .btn-ghost:focus-visible,
+    .btn-dark:focus-visible {
+      outline: 2px solid var(--gold); outline-offset: 3px;
+    }
 
     /* ── SIDEBAR MOCK ───────────────────────────────────────────── */
     .hero-visual {
       flex: 0 0 auto; position: relative; z-index: 1;
       opacity: 0; animation: fadeUp 0.8s ease 1.0s forwards;
+      isolation: isolate;
     }
     .hero-glow-ring {
       position: absolute; top: -60px; right: -40px;
       width: 260px; height: 260px;
       background: radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%);
-      pointer-events: none;
+      pointer-events: none; z-index: 0;
     }
     .sidebar-mock {
       width: 310px;
@@ -318,6 +336,19 @@
     }
     .sm-btn-sel.idle   { background: var(--deep-blue); color: var(--warm-white); }
     .sm-btn-sel.active { background: var(--gold); color: var(--ink); }
+    .sm-btn-row {
+      display: flex; gap: 6px;
+    }
+    .sm-btn-row .sm-btn-sel,
+    .sm-btn-row .sm-btn-scr { flex: 1; }
+    .sm-btn-scr {
+      padding: 9px;
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+      border-radius: var(--r); border: 1px solid rgba(201,168,76,0.3);
+      background: transparent; color: var(--gold); cursor: pointer; font-weight: 500;
+      transition: background var(--tr), color var(--tr);
+    }
+    .sm-btn-scr:hover { background: rgba(201,168,76,0.1); }
 
     /* ── PROBLEM STATS ──────────────────────────────────────────── */
     .problem { padding: 88px 48px; background: var(--paper); }
@@ -666,7 +697,8 @@
     /* ── RESPONSIVE ─────────────────────────────────────────────── */
     @media (max-width: 920px) {
       .nav { padding: 0 24px; }
-      .hero { flex-direction: column; padding: 100px 24px 60px; gap: 48px; }
+      .hero { padding: 100px 24px 60px; }
+      .hero-inner { flex-direction: column; gap: 48px; }
       .hero-visual { width: 100%; display: flex; justify-content: center; }
       .sidebar-mock { width: 300px; }
       .stats-grid { grid-template-columns: 1fr; gap: 3px; }
@@ -695,6 +727,7 @@
 
 <!-- ── HERO ─────────────────────────────────────────────────────── -->
 <section class="hero">
+<div class="hero-inner">
   <div class="hero-text">
     <p class="hero-eyebrow">CHROME EXTENSION · FREE · OPEN SOURCE · MIT</p>
     <h1 class="hero-headline">
@@ -714,16 +747,16 @@
     </div>
   </div>
 
-  <div class="hero-visual">
-    <div class="hero-glow-ring"></div>
+  <div class="hero-visual" role="img" aria-label="Markup sidebar showing element annotations and a generated fix brief">
+    <div class="hero-glow-ring" aria-hidden="true"></div>
     <!-- Sidebar mockup -->
     <div class="sidebar-mock">
       <div class="sm-header">
         <span class="sm-logo">Markup</span>
         <span class="sm-count" id="h-count">0 notes</span>
-        <span class="sm-icon">📄</span>
-        <span class="sm-icon">⚙</span>
-        <span class="sm-icon">✕</span>
+        <span class="sm-icon" role="img" aria-label="Generate brief">📄</span>
+        <span class="sm-icon" role="img" aria-label="Settings">⚙</span>
+        <span class="sm-icon" role="img" aria-label="Close">✕</span>
       </div>
       <div class="sm-session">
         <div class="sm-session-title">Homepage audit</div>
@@ -811,10 +844,14 @@
       </div>
       <div class="sm-footer">
         <button class="sm-btn-gen disabled" id="h-gen">GENERATE BRIEF →</button>
-        <button class="sm-btn-sel idle" id="h-sel">SELECT ELEMENT</button>
+        <div class="sm-btn-row">
+          <button class="sm-btn-sel idle" id="h-sel">SELECT ELEMENT</button>
+          <button class="sm-btn-scr" id="h-scr">SCREENSHOT</button>
+        </div>
       </div>
     </div>
   </div>
+</div><!-- /.hero-inner -->
 </section>
 
 <!-- ── PROBLEM ───────────────────────────────────────────────────── -->
@@ -854,7 +891,7 @@
           <div class="sm-header">
             <span class="sm-logo">Markup</span>
             <span class="sm-count" id="w-count">0 notes</span>
-            <span class="sm-icon">✕</span>
+            <span class="sm-icon" role="img" aria-label="Close">✕</span>
           </div>
           <div class="sm-session">
             <div class="sm-session-title">My project review</div>
@@ -894,7 +931,10 @@
           </div>
           <div class="sm-footer">
             <button class="sm-btn-gen disabled" id="w-gen">GENERATE BRIEF →</button>
-            <button class="sm-btn-sel idle" id="w-sel">SELECT ELEMENT</button>
+            <div class="sm-btn-row">
+              <button class="sm-btn-sel idle" id="w-sel">SELECT ELEMENT</button>
+              <button class="sm-btn-scr" id="w-scr">SCREENSHOT</button>
+            </div>
           </div>
         </div>
       </div>
