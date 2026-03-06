@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Changelog — Markup</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="description" content="Full release history for Markup. Every sprint, feature, and bug fix from v0.1.0 through the current release." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://getmarkup.dev/changelog" />
@@ -652,6 +653,13 @@
   </footer>
 
   <script>
+    // Nav active state
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && !href.startsWith('http') && href !== '/' && window.location.pathname.startsWith(href)) {
+        link.classList.add('active');
+      }
+    });
     // Navbar background on scroll
     const nav = document.querySelector('nav');
     window.addEventListener('scroll', () => {

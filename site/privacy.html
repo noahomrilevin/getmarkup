@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacy Policy — Markup</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="description" content="Markup's privacy policy. Markup stores all notes locally in your browser. No data ever leaves your device. No accounts, no tracking, no backend." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://getmarkup.dev/privacy" />
@@ -375,6 +376,13 @@
   </footer>
 
   <script>
+    // Nav active state
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && !href.startsWith('http') && href !== '/' && window.location.pathname.startsWith(href)) {
+        link.classList.add('active');
+      }
+    });
     // Nav background on scroll
     const nav = document.getElementById('nav');
     window.addEventListener('scroll', () => {

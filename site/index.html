@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markup — Annotate any page. Generate a fix brief.</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="description" content="Markup is a Chrome extension that lets you annotate any page — localhost, staging, or live — and generate a structured fix brief to paste into Claude, VS Code, or Cursor. No AI, no API, runs entirely in your browser." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://getmarkup.dev/" />
@@ -79,7 +80,8 @@
       padding: 7px 14px; border-radius: var(--r);
       transition: color var(--tr);
     }
-    .nav-link:hover { color: rgba(255,255,255,0.9); }
+    .nav-link:hover, .nav-link.active { color: rgba(255,255,255,0.9); }
+    .nav-link.active { color: var(--gold) !important; }
     .nav-link:focus-visible {
       outline: 2px solid var(--gold); outline-offset: 3px;
       color: rgba(255,255,255,0.9); border-radius: var(--r);
@@ -506,7 +508,14 @@
     .p-q {
       font-size: 12px; font-style: italic; color: var(--slate); line-height: 1.55;
       border-left: 2px solid rgba(201,168,76,0.3); padding-left: 12px;
+      margin-bottom: 14px;
     }
+    .p-after {
+      font-size: 12px; color: var(--deep-blue); line-height: 1.55;
+      background: rgba(201,168,76,0.08); border-radius: 4px;
+      padding: 8px 11px; margin-top: 2px;
+    }
+    .p-after strong { color: var(--deep-blue); font-weight: 600; }
 
 
     /* ── ORIGIN STORY ─────────────────────────────────────────── */
@@ -712,7 +721,7 @@
       .hero-inner { flex-direction: column; gap: 48px; }
       .hero-visual { width: 100%; display: flex; justify-content: center; }
       .sidebar-mock { width: 300px; }
-      .stats-grid { grid-template-columns: 1fr; gap: 3px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; gap: 3px; }
       .how { padding: 60px 24px; }
       .how-layout { grid-template-columns: 1fr; }
       .how-sticky { position: relative; top: 0; display: flex; justify-content: center; margin-bottom: 48px; }
@@ -747,9 +756,9 @@
       <em>Ship the fix.</em>
     </h1>
     <p class="hero-sub">
-      You built something with Claude or Cursor. Now you're staring at the browser,
+      You built something with Claude or an AI editor. Now you're staring at the browser,
       spotting issues, losing context every tab-switch.
-      Markup lives in your sidebar — click any element, leave a note,
+      Markup lives in your sidebar — leave a note on anything,
       generate one structured brief. Paste it in. Done.
     </p>
     <div class="hero-ctas">
@@ -773,56 +782,47 @@
         <div class="sm-session-title">Homepage audit</div>
         <div class="sm-session-url">getmarkup.dev</div>
       </div>
-      <div class="sm-tabs">
-        <div class="sm-tab on">ALL</div>
-        <div class="sm-tab">CRITICAL</div>
-        <div class="sm-tab">HIGH</div>
-        <div class="sm-tab">MEDIUM</div>
-        <div class="sm-tab">LOW</div>
-      </div>
       <div class="sm-body">
-        <!-- S0: empty -->
+        <!-- S0: empty (Simple Mode) -->
         <div class="sm-state on" id="hs0">
           <div class="sm-empty">
-            <div class="sm-empty-h">Ready to annotate?</div>
-            <div class="sm-empty-p">Click Select Element to start,<br>or type a note below.</div>
+            <div class="sm-empty-h">Annotate anything.</div>
+            <div class="sm-empty-p">Leave a note below,<br>or grab a screenshot.</div>
           </div>
         </div>
-        <!-- S1: selecting -->
+        <!-- S1: form visible, type picker shown -->
         <div class="sm-state" id="hs1">
-          <div class="sm-selecting-hint">Hover an element to preview<br>its selector</div>
-        </div>
-        <!-- S2: element + form -->
-        <div class="sm-state" id="hs2">
           <div class="sm-form">
-            <div class="sm-chip live" id="h-chip">Hover to preview element…</div>
             <div class="sm-types">
-              <span class="sm-ty">GENERAL</span>
               <span class="sm-ty t-bug">BUG</span>
               <span class="sm-ty">DESIGN</span>
               <span class="sm-ty">COPY</span>
-              <span class="sm-ty">?</span>
+              <span class="sm-ty">GENERAL</span>
             </div>
-            <div class="sm-sevs">
-              <span class="sm-sv sv-critical">Critical</span>
-              <span class="sm-sv sv-high on">High</span>
-              <span class="sm-sv sv-medium">Medium</span>
-              <span class="sm-sv sv-low">Low</span>
-            </div>
-            <div class="sm-ta" id="h-ta"></div>
+            <div class="sm-ta" id="h-ta" style="min-height:48px;"></div>
           </div>
         </div>
-        <!-- S3: notes saved -->
+        <!-- S2: same form, text being typed in (JS animates h-ta) -->
+        <div class="sm-state" id="hs2">
+          <div class="sm-form">
+            <div class="sm-types">
+              <span class="sm-ty t-bug">BUG</span>
+              <span class="sm-ty">DESIGN</span>
+              <span class="sm-ty">COPY</span>
+              <span class="sm-ty">GENERAL</span>
+            </div>
+            <div class="sm-ta" id="h-ta2" style="min-height:48px;"></div>
+          </div>
+        </div>
+        <!-- S3: notes saved, no severity badge, no selector (Simple Mode) -->
         <div class="sm-state" id="hs3">
           <div class="sm-note">
-            <div class="sm-note-tags"><span class="sm-nt nt-high">HIGH</span><span class="sm-nt nt-bug">BUG</span></div>
-            <div class="sm-note-sel">header.site-header</div>
-            <div class="sm-note-txt">Navigation links not keyboard accessible — no visible focus states.</div>
+            <div class="sm-note-tags"><span class="sm-nt nt-bug">BUG</span></div>
+            <div class="sm-note-txt">Nav links not keyboard accessible — no visible focus states.</div>
           </div>
           <div class="sm-note">
-            <div class="sm-note-tags"><span class="sm-nt nt-med">MEDIUM</span><span class="sm-nt nt-design">DESIGN</span></div>
-            <div class="sm-note-sel">img.hero-image</div>
-            <div class="sm-note-txt">Missing alt text — screen readers get nothing.</div>
+            <div class="sm-note-tags"><span class="sm-nt nt-design">DESIGN</span></div>
+            <div class="sm-note-txt">Hero image missing alt text.</div>
           </div>
         </div>
         <!-- S4: generating -->
@@ -855,10 +855,7 @@
       </div>
       <div class="sm-footer">
         <button class="sm-btn-gen disabled" id="h-gen">GENERATE BRIEF →</button>
-        <div class="sm-btn-row">
-          <button class="sm-btn-sel idle" id="h-sel">SELECT ELEMENT</button>
-          <button class="sm-btn-scr" id="h-scr">SCREENSHOT</button>
-        </div>
+        <button class="sm-btn-scr" style="width:100%;" id="h-scr">SCREENSHOT</button>
       </div>
     </div>
   </div>
@@ -868,7 +865,7 @@
 <!-- ── PROBLEM ───────────────────────────────────────────────────── -->
 <section class="problem">
   <div class="problem-inner">
-    <span class="section-eyebrow reveal">THE VIBE CODING QA CRISIS</span>
+    <span class="section-eyebrow reveal">BUILDING WITHOUT A REVIEW PROCESS</span>
     <h2 class="section-h2 reveal">
       Developers are shipping without reviewing.<br>
       <em>Not because they don't care —<br>the tools just weren't built for this workflow.</em>
@@ -908,21 +905,16 @@
             <div class="sm-session-title">My project review</div>
             <div class="sm-session-url">localhost:3000</div>
           </div>
-          <div class="sm-tabs">
-            <div class="sm-tab on">ALL</div>
-            <div class="sm-tab">HIGH</div>
-          </div>
           <div class="sm-body">
             <div class="sm-state on" id="ws1">
               <div class="sm-empty">
-                <div class="sm-empty-h">Ready to annotate?</div>
-                <div class="sm-empty-p">Click Select Element to start.</div>
+                <div class="sm-empty-h">Annotate anything.</div>
+                <div class="sm-empty-p">Leave a note, or grab a screenshot.</div>
               </div>
             </div>
             <div class="sm-state" id="ws2">
               <div class="sm-note">
-                <div class="sm-note-tags"><span class="sm-nt nt-high">HIGH</span><span class="sm-nt nt-bug">BUG</span></div>
-                <div class="sm-note-sel">nav.main-nav</div>
+                <div class="sm-note-tags"><span class="sm-nt nt-bug">BUG</span></div>
                 <div class="sm-note-txt">Mobile hamburger icon missing below 480px.</div>
               </div>
             </div>
@@ -942,10 +934,7 @@
           </div>
           <div class="sm-footer">
             <button class="sm-btn-gen disabled" id="w-gen">GENERATE BRIEF →</button>
-            <div class="sm-btn-row">
-              <button class="sm-btn-sel idle" id="w-sel">SELECT ELEMENT</button>
-              <button class="sm-btn-scr" id="w-scr">SCREENSHOT</button>
-            </div>
+            <button class="sm-btn-scr" style="width:100%;" id="w-scr">SCREENSHOT</button>
           </div>
         </div>
       </div>
@@ -954,13 +943,13 @@
         <div class="how-step on" data-w="1">
           <div class="step-num">STEP 01</div>
           <h3 class="step-h">Click any element<br>on any page.</h3>
-          <p class="step-p">Open Markup from the toolbar. Hit SELECT ELEMENT and hover anything — localhost, staging, or live. The sidebar shows exactly which element you've highlighted, with a precise selector so developers know exactly what to fix.</p>
+          <p class="step-p">Open Markup from the toolbar. Leave a note on anything — localhost, staging, live, or file://. In Dev Mode, hover any element to pin your note to it with an exact CSS selector for developer handoff.</p>
           <div class="step-detail">Works on localhost:3000 · staging · file:// · any https:// URL</div>
         </div>
         <div class="how-step" data-w="2">
           <div class="step-num">STEP 02</div>
           <h3 class="step-h">Leave a note.<br>Type or speak.</h3>
-          <p class="step-p">Tag each issue as Bug, Design, Copy, or Question. Set severity. Notes auto-save per URL — close the browser, they're still there when you come back. Works with <a href="https://ref.wisprflow.ai/noah-levin-fctx" target="_blank" rel="noopener">Wispr Flow</a>: dictate while you scroll.</p>
+          <p class="step-p">Tag each issue: Bug, Design, Copy, or Question. Notes auto-save per URL — close the browser, they're still there. Works with <a href="https://ref.wisprflow.ai/noah-levin-fctx" target="_blank" rel="noopener">Wispr Flow</a>: dictate while you scroll.</p>
           <div class="step-detail">Notes persist per URL in local storage. No account, no backend.</div>
         </div>
         <div class="how-step" data-w="3">
@@ -1003,7 +992,7 @@
     </div>
     <div class="brief-footer">
       <button class="btn-gold" id="copy-btn" style="font-size:11px; padding:11px 22px;">COPY TO CLIPBOARD</button>
-      <span class="brief-note-text">Template-based · No AI · No API · Runs entirely in your browser</span>
+      <span class="brief-note-text">Template-based · No AI · No API · Export as PDF, ZIP, MD, JSON, or CSV</span>
     </div>
   </div>
 </section>
@@ -1052,6 +1041,7 @@
         <div class="p-role">VIBE CODER / NON-TECHNICAL FOUNDER</div>
         <div class="p-pain"><strong>Before Markup:</strong> typed notes into a running Google Doc between coding sessions. Lost context every time.</div>
         <div class="p-q">"When I finish a session, I want to capture every issue by voice and ship a brief to Claude in one click."</div>
+        <div class="p-after"><strong>After:</strong> voice notes into Markup, brief generated, Claude fixes 30 things in one paste.</div>
       </div>
       <div class="p-card">
         <span class="p-tag">P2 · THE PRODUCT DESIGNER</span>
@@ -1059,6 +1049,7 @@
         <div class="p-role">UX / UI DESIGNER</div>
         <div class="p-pain"><strong>Before Markup:</strong> annotated screenshots with red arrows in Preview, then described the fix in text — losing element context every time.</div>
         <div class="p-q">"When I audit a UI, I want to pin issues to exact elements so engineers know precisely what to fix."</div>
+        <div class="p-after"><strong>After:</strong> every issue anchored to an exact CSS selector. Zero ambiguity in the developer handoff.</div>
       </div>
       <div class="p-card">
         <span class="p-tag">P3 · THE FREELANCER</span>
@@ -1066,6 +1057,7 @@
         <div class="p-role">WEB AGENCY / INDEPENDENT CONSULTANT</div>
         <div class="p-pain"><strong>Before Markup:</strong> narrated a Loom recording and hoped the client understood the context.</div>
         <div class="p-q">"When I audit a client site, I want a polished report without manual note-taking."</div>
+        <div class="p-after"><strong>After:</strong> annotate the live site, screenshot key issues, export a PDF. Professional client report in minutes.</div>
       </div>
     </div>
   </div>
@@ -1126,9 +1118,9 @@
 <!-- ── DOCS PREVIEW ──────────────────────────────────────────────── -->
 <section class="docs" id="docs-section">
   <div class="docs-inner">
-    <span class="section-eyebrow reveal">DEVELOPER DOCS</span>
-    <h2 class="section-h2 reveal" style="margin-bottom:12px;">Everything you need<br>to extend Markup.</h2>
-    <p class="docs-sub reveal">Reference docs for the brief format, note types, storage model, and how to build on top of it.</p>
+    <span class="section-eyebrow reveal">DOCUMENTATION</span>
+    <h2 class="section-h2 reveal" style="margin-bottom:12px;">Everything you need<br>to use Markup.</h2>
+    <p class="docs-sub reveal">User guide, brief format, and open-source contributor docs — in one place.</p>
     <div class="docs-frame reveal">
       <!-- sidebar nav -->
       <div class="docs-nav">
@@ -1214,65 +1206,71 @@
 </footer>
 
 <script>
+/* ── NAV ACTIVE STATE ────────────────────────────────────────────── */
+document.querySelectorAll('.nav-link').forEach(link => {
+  const href = link.getAttribute('href');
+  if (href && !href.startsWith('http') && href !== '/' && window.location.pathname.startsWith(href)) {
+    link.classList.add('active');
+  }
+});
+
 /* ── NAV SCROLL ──────────────────────────────────────────────────── */
 const topNav = document.getElementById('top-nav');
 window.addEventListener('scroll', () => {
   topNav.classList.toggle('scrolled', window.scrollY > 50);
 }, { passive: true });
 
-/* ── HERO SIDEBAR ANIMATION ──────────────────────────────────────── */
-const SEL_TEXT  = 'header.site-header';
-const NOTE_TEXT = 'Navigation links not keyboard accessible — no visible focus states.';
-
-let hState = 0, chipTimer, taTimer;
+/* ── HERO SIDEBAR ANIMATION (Simple Mode) ────────────────────────── */
+const NOTE_TEXT = 'Nav links not keyboard accessible — no visible focus states.';
+let hState = 0, taTimer;
 
 function setHeroState(n) {
-  clearInterval(chipTimer); clearInterval(taTimer);
+  clearInterval(taTimer);
   ['hs0','hs1','hs2','hs3','hs4','hs5'].forEach((id, i) => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('on', i === n);
   });
   const genBtn = document.getElementById('h-gen');
-  const selBtn = document.getElementById('h-sel');
   const cnt    = document.getElementById('h-count');
 
   if (n === 0) {
-    genBtn.className = 'sm-btn-gen disabled'; selBtn.className = 'sm-btn-sel idle';
-    selBtn.textContent = 'SELECT ELEMENT'; cnt.textContent = '0 notes';
+    if (genBtn) genBtn.className = 'sm-btn-gen disabled';
+    if (cnt) cnt.textContent = '0 notes';
   } else if (n === 1) {
-    genBtn.className = 'sm-btn-gen disabled'; selBtn.className = 'sm-btn-sel active';
-    selBtn.textContent = 'STOP SELECTING'; cnt.textContent = '0 notes';
+    // Form visible, type picker shown, empty textarea
+    if (genBtn) genBtn.className = 'sm-btn-gen disabled';
+    if (cnt) cnt.textContent = '0 notes';
+    const ta = document.getElementById('h-ta');
+    if (ta) ta.textContent = '';
   } else if (n === 2) {
-    genBtn.className = 'sm-btn-gen disabled'; selBtn.className = 'sm-btn-sel active';
-    selBtn.textContent = 'STOP SELECTING'; cnt.textContent = '0 notes';
-    // type selector
-    const chip = document.getElementById('h-chip');
-    const ta   = document.getElementById('h-ta');
-    chip.textContent = ''; ta.textContent = '';
-    let si = 0;
-    chipTimer = setInterval(() => {
-      if (si < SEL_TEXT.length) { chip.textContent += SEL_TEXT[si++]; }
-      else {
-        clearInterval(chipTimer);
-        let ti = 0;
-        taTimer = setInterval(() => {
-          if (ti < NOTE_TEXT.length) { ta.textContent += NOTE_TEXT[ti++]; }
-          else clearInterval(taTimer);
-        }, 28);
-      }
-    }, 42);
+    // Typing note into textarea
+    if (genBtn) genBtn.className = 'sm-btn-gen disabled';
+    if (cnt) cnt.textContent = '0 notes';
+    const ta = document.getElementById('h-ta2');
+    if (ta) {
+      ta.textContent = '';
+      let ti = 0;
+      taTimer = setInterval(() => {
+        if (ti < NOTE_TEXT.length) { ta.textContent += NOTE_TEXT[ti++]; }
+        else clearInterval(taTimer);
+      }, 30);
+    }
   } else if (n === 3) {
-    genBtn.className = 'sm-btn-gen enabled'; selBtn.className = 'sm-btn-sel idle';
-    selBtn.textContent = 'SELECT ELEMENT'; cnt.textContent = '2 notes';
+    // Notes saved
+    if (genBtn) genBtn.className = 'sm-btn-gen enabled';
+    if (cnt) cnt.textContent = '2 notes';
   } else if (n === 4) {
-    genBtn.className = 'sm-btn-gen disabled'; cnt.textContent = '2 notes';
+    // Generating
+    if (genBtn) genBtn.className = 'sm-btn-gen disabled';
+    if (cnt) cnt.textContent = '2 notes';
   } else if (n === 5) {
-    genBtn.className = 'sm-btn-gen enabled'; selBtn.className = 'sm-btn-sel idle';
-    selBtn.textContent = 'SELECT ELEMENT'; cnt.textContent = '2 notes';
+    // Brief shown
+    if (genBtn) genBtn.className = 'sm-btn-gen enabled';
+    if (cnt) cnt.textContent = '2 notes';
   }
 }
 
-const HERO_TIMES = [2200, 1800, 3800, 2600, 1800, 3200];
+const HERO_TIMES = [2400, 1600, 3400, 2600, 1800, 3200];
 function heroLoop() {
   setHeroState(hState);
   setTimeout(() => { hState = (hState + 1) % 6; heroLoop(); }, HERO_TIMES[hState]);
@@ -1286,17 +1284,17 @@ function setWalkthrough(n) {
     if (el) el.classList.toggle('on', i === n);
   });
   const wGen = document.getElementById('w-gen');
-  const wSel = document.getElementById('w-sel');
+
   const wCnt = document.getElementById('w-count');
   if (n === 0) {
-    wGen.className = 'sm-btn-gen disabled'; wSel.className = 'sm-btn-sel idle';
-    wSel.textContent = 'SELECT ELEMENT'; wCnt.textContent = '0 notes';
+    if (wGen) wGen.className = 'sm-btn-gen disabled';
+    if (wCnt) wCnt.textContent = '0 notes';
   } else if (n === 1) {
-    wGen.className = 'sm-btn-gen enabled'; wSel.className = 'sm-btn-sel idle';
-    wSel.textContent = 'SELECT ELEMENT'; wCnt.textContent = '1 note';
+    if (wGen) wGen.className = 'sm-btn-gen enabled';
+    if (wCnt) wCnt.textContent = '1 note';
   } else {
-    wGen.className = 'sm-btn-gen enabled'; wSel.className = 'sm-btn-sel idle';
-    wSel.textContent = 'SELECT ELEMENT'; wCnt.textContent = '1 note';
+    if (wGen) wGen.className = 'sm-btn-gen enabled';
+    if (wCnt) wCnt.textContent = '1 note';
   }
   document.querySelectorAll('.how-step').forEach((s, i) => s.classList.toggle('on', i === n));
 }
