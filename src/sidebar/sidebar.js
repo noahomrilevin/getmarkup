@@ -36,7 +36,7 @@ const QUOTA_WARN_BYTES  = Math.round((chrome.storage.local.QUOTA_BYTES || 10 * 1
 
 // ─── Brief title ───────────────────────────────────────────────
 function getBriefTitle() {
-  return sessionTitle ? `Markup — ${sessionTitle}` : "Markup Brief";
+  return sessionTitle ? `Markup — ${sessionTitle}` : "Markup brief";
 }
 
 // ─── Brief archive constants ────────────────────────────────────
@@ -3122,7 +3122,7 @@ async function init() {
     console.error("Markup: init failed", err);
     emptyState.innerHTML = `
       <p class="empty-state__text">Markup failed to load.</p>
-      <button class="btn-activate" id="reload-markup">Reload Markup</button>
+      <button class="btn-activate" id="reload-markup">Reload</button>
     `;
     document.getElementById("reload-markup")?.addEventListener("click", () => {
       window.location.reload();

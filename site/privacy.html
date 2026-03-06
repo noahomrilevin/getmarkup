@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Markup</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500&family=DM+Sans:opsz,wght@9..40,400;9..40,600&family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --ink: #0D0D0D;
+      --paper: #F5F0E8;
+      --gold: #C9A84C;
+      --gold-light: #E8D49A;
+      --deep-blue: #1A2744;
+      --mid-blue: #2D4A8A;
+      --slate: #6B7A99;
+      --warm-white: #FAF8F3;
+      --muted: #EDE8DF;
+      --border: rgba(201,168,76,0.22);
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --font-mono: 'DM Mono', 'Courier New', monospace;
+      --r: 6px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      font-family: var(--font-body);
+      color: var(--ink);
+      background-color: var(--warm-white);
+      line-height: 1.6;
+    }
+
+    a {
+      color: var(--mid-blue);
+      text-decoration: none;
+      border-bottom: 1px solid var(--gold);
+      transition: color 0.2s;
+    }
+
+    a:hover {
+      color: var(--gold);
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem 2rem;
+      background-color: var(--warm-white);
+      border-bottom: 1px solid var(--border);
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    nav.scrolled {
+      background-color: var(--deep-blue);
+      border-bottom-color: rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-style: italic;
+      font-weight: 700;
+      color: var(--gold);
+      text-decoration: none;
+      border: none;
+    }
+
+    nav.scrolled .nav-logo {
+      color: var(--gold);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.95rem;
+      color: var(--ink);
+      border: none;
+      transition: color 0.2s;
+    }
+
+    nav.scrolled .nav-links a {
+      color: var(--warm-white);
+    }
+
+    .nav-links a:hover {
+      color: var(--gold);
+    }
+
+    .nav-cta {
+      background-color: var(--gold);
+      color: var(--ink);
+      padding: 0.6rem 1.2rem;
+      border-radius: var(--r);
+      border: none;
+      font-weight: 600;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+
+    .nav-cta:hover {
+      background-color: var(--gold-light);
+      color: var(--ink);
+    }
+
+    /* Main content */
+    main {
+      margin-top: 80px;
+      padding-top: 0;
+    }
+
+    /* Hero section */
+    .hero {
+      background-color: var(--deep-blue);
+      color: var(--warm-white);
+      padding: 4rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: 3.5rem;
+      font-style: italic;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      letter-spacing: -1px;
+    }
+
+    .hero .subtitle {
+      font-size: 0.95rem;
+      color: var(--gold-light);
+      font-weight: 500;
+    }
+
+    /* Content section */
+    .content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 4rem 2rem;
+      background-color: var(--paper);
+    }
+
+    .content h2 {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      font-style: italic;
+      color: var(--deep-blue);
+      margin-top: 3rem;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--gold);
+      padding-bottom: 0.5rem;
+    }
+
+    .content h2:first-child {
+      margin-top: 0;
+    }
+
+    .content p {
+      margin-bottom: 1.2rem;
+      line-height: 1.8;
+      color: var(--ink);
+    }
+
+    .content ul, .content ol {
+      margin-left: 1.5rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .content li {
+      margin-bottom: 0.6rem;
+      line-height: 1.8;
+    }
+
+    .code-block {
+      background-color: var(--deep-blue);
+      color: var(--gold-light);
+      padding: 1.2rem;
+      border-radius: var(--r);
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin: 1.2rem 0;
+      line-height: 1.6;
+    }
+
+    .contact-info {
+      background-color: var(--muted);
+      padding: 1.5rem;
+      border-radius: var(--r);
+      border-left: 4px solid var(--gold);
+      margin-top: 2rem;
+    }
+
+    .contact-info p {
+      margin-bottom: 0.5rem;
+    }
+
+    /* Footer */
+    footer {
+      background-color: var(--deep-blue);
+      color: var(--warm-white);
+      padding: 3rem 2rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 2rem;
+    }
+
+    .footer-logo {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: var(--warm-white);
+      border-color: var(--gold);
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--gold);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      nav {
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .nav-links {
+        gap: 1rem;
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+
+      .content {
+        padding: 2rem 1.5rem;
+      }
+
+      .footer-content {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav id="nav">
+    <a href="/" class="nav-logo">Markup</a>
+    <ul class="nav-links">
+      <li><a href="https://github.com/noachlevin/Markup" target="_blank">GitHub ↗</a></li>
+      <li><a href="https://chrome.google.com/webstore/detail/markup" class="nav-cta">Add to Chrome →</a></li>
+    </ul>
+  </nav>
+
+  <!-- Main content -->
+  <main>
+    <!-- Hero section -->
+    <section class="hero">
+      <h1>Privacy Policy</h1>
+      <p class="subtitle">Last updated: March 2026 · Markup v0.9.1</p>
+    </section>
+
+    <!-- Content -->
+    <section class="content">
+      <h2>Data We Collect</h2>
+      <p>The short answer: nothing.</p>
+      <p>Markup does not collect, transmit, store, or process any data outside your browser. All data stays on your device. There are no servers, no backend, no accounts, and no analytics.</p>
+
+      <h2>Local Storage</h2>
+      <p>Markup stores all your notes, session information, and settings locally using <code>chrome.storage.local</code>. This data never leaves your computer and is only accessible to Markup running in your browser.</p>
+      <p>What's stored locally:</p>
+      <ul>
+        <li>Your notes (text, type, severity, metadata about selected elements)</li>
+        <li>Session titles and brief archives</li>
+        <li>Your mode preference (Simple or Dev)</li>
+        <li>Settings (brief sort order, image folder handle)</li>
+        <li>Backup snapshots (last 3 per domain)</li>
+      </ul>
+      <p>All of this data remains on your device. We never read it, transmit it, or access it.</p>
+
+      <h2>Images & Files</h2>
+      <p>When you save screenshots or paste images into notes, Markup uses the <strong>File System Access API</strong>. You explicitly grant permission to a folder on your computer, and Markup saves images only to that folder.</p>
+      <p>You control:</p>
+      <ul>
+        <li>Where images are saved (your chosen directory)</li>
+        <li>When to grant or revoke folder access</li>
+        <li>The lifetime of your image files</li>
+      </ul>
+      <p>Images are never uploaded anywhere. They stay in your folder.</p>
+
+      <h2>No Analytics</h2>
+      <p>We do not use analytics, tracking pixels, event logging, or crash reporting. We have no visibility into how you use Markup. No telemetry, no metrics, no data collection of any kind.</p>
+
+      <h2>No Accounts</h2>
+      <p>Markup does not require login, accounts, or any personal information. There is no backend database and no user management. You install it, use it, and everything stays on your device.</p>
+
+      <h2>No Third-Party Services</h2>
+      <p>Markup does not integrate with third-party data brokers, analytics providers, or ad networks. The only exception is optional integration with <a href="https://www.wispr.me" target="_blank">Wispr Flow</a>, a separate product, if you choose to enable voice notes. Wispr Flow has its own privacy terms.</p>
+
+      <h2>Open Source</h2>
+      <p>Markup is <a href="https://github.com/noachlevin/Markup" target="_blank">open source under the MIT license</a>. You can read the entire source code on GitHub, verify what we claim, and fork it if you want to run your own version.</p>
+
+      <h2>Contact</h2>
+      <div class="contact-info">
+        <p><strong>Questions about this policy?</strong></p>
+        <p>Reach out to <a href="mailto:noah@getmarkup.dev">noah@getmarkup.dev</a></p>
+        <p>Noah Levin, Builder</p>
+      </div>
+
+      <p style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--slate);">Markup is a Chrome extension for annotating web pages and generating AI-ready briefs. No tracking. No accounts. No servers. Just you, your notes, and your device.</p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-logo">N.Levin</div>
+      <ul class="footer-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="https://github.com/noachlevin/Markup" target="_blank">GitHub</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <script>
+    // Nav background on scroll
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 50) {
+        nav.classList.add('scrolled');
+      } else {
+        nav.classList.remove('scrolled');
+      }
+    });
+  </script>
+</body>
+</html>
