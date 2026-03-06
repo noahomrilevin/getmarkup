@@ -541,10 +541,21 @@
         </ul>
       </div>
 
+      <!-- Using with AI -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Using with AI</div>
+        <ul>
+          <li><a href="#using-with-claude">Using with Claude</a></li>
+          <li><a href="#using-with-cursor">Using with Cursor</a></li>
+        </ul>
+      </div>
+
       <!-- Contributing -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Contributing</div>
         <ul>
+          <li><a href="#contributor-setup">Setup &amp; workflow</a></li>
+          <li><a href="#architecture">Architecture notes</a></li>
           <li><a href="#project-structure">Project structure</a></li>
           <li><a href="#adding-types">Adding note types</a></li>
           <li><a href="#changelog-link">Changelog</a></li>
@@ -737,7 +748,7 @@ cd markup</code></pre>
         <p>Markup integrates with <strong>Wispr Flow</strong>, a voice-to-text tool for Chrome. Dictate your thoughts directly into the note textarea using your microphone.</p>
 
         <h3>Setup</h3>
-        <p>Install the <a href="https://ref.wisprflow.ai/noah-levin-fctx" target="_blank" rel="noopener">Wispr Flow</a> from the Chrome Web Store. Once installed, you'll see a mic icon in Markup's settings.</p>
+        <p>Install <a href="https://ref.wisprflow.ai/noah-levin-fctx" target="_blank" rel="noopener">Wispr Flow</a> from the Chrome Web Store. Once installed, you'll see a mic icon in Markup's settings.</p>
 
         <h3>Why a floating input?</h3>
         <p>The sidebar is technically a separate browsing context from the page you're viewing. Chrome's security boundary prevents the sidebar from directly focusing elements on the page. To work around this, Markup injects a hidden textarea into the page itself. This "floating input" is where Wispr Flow sends your dictated text. The content script then passes that text back to the sidebar, so it appears in your note.</p>
@@ -987,7 +998,7 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
         <p>Markup stores all notes locally in your browser using Chrome's storage API. No data is sent to the internet.</p>
 
         <h3>Storage mechanism</h3>
-        <p>Notes are stored in <code>chrome.storage.local</code>, which is a secure, persistent key-value store built into Chrome. Your data stays on your computer and is encrypted by the browser.</p>
+        <p>Notes are stored in <code>chrome.storage.local</code>, a persistent key-value store sandboxed to the Markup extension. Your data stays on your computer — it never leaves your device and is only accessible to Markup running in your browser.</p>
 
         <h3>Key structure</h3>
         <p>Each URL gets its own storage key. The key is derived by <strong>normalizing the URL</strong> — stripping the hash fragment and trailing slash. For example:</p>
@@ -1115,6 +1126,125 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
         <div class="note-box">
           <strong>Tip:</strong> Pick a color from the design tokens (gold, blue, slate, etc.) that visually matches the type's meaning. "Performance" might be orange/warning-adjacent, while "Accessibility" could be green/success.
         </div>
+      </div>
+
+      <!-- Using with Claude -->
+      <div class="section" id="using-with-claude">
+        <h2>Using with Claude</h2>
+        <p>The brief output is designed to be pasted directly into a Claude conversation. Here's the workflow:</p>
+        <ol>
+          <li>Annotate your build — select elements, leave notes, set severity.</li>
+          <li>Click <strong>GENERATE BRIEF</strong> in the sidebar.</li>
+          <li>Click <strong>COPY TO CLIPBOARD</strong> or download the PDF/ZIP.</li>
+          <li>Open <a href="https://claude.ai" target="_blank" rel="noopener">Claude.ai</a> (or any Claude-based tool).</li>
+          <li>Paste the brief into a new conversation.</li>
+        </ol>
+
+        <h3>Suggested prompt framing</h3>
+        <p>The brief is self-explanatory, but framing your prompt helps Claude prioritize:</p>
+        <pre><code>Here's my review brief from Markup. Please fix all Critical and High issues first, then address Medium.
+Use the exact CSS selectors provided — they are the precise elements I'm pointing at.
+
+[PASTE BRIEF HERE]</code></pre>
+        <p>Or for a targeted fix:</p>
+        <pre><code>Fix only the Critical issues in this brief. Do not touch anything else.
+
+[PASTE BRIEF HERE]</code></pre>
+
+        <h3>Why it works well</h3>
+        <p>The brief format includes exact CSS selectors, element labels, parent context, and severity levels. Claude can map every issue to the correct line in your codebase without screenshots or ambiguous descriptions. The severity grouping tells Claude what to prioritize. The type labels (Bug / Design / Copy) tell it what kind of change is expected.</p>
+
+        <div class="note-box">
+          <strong>Tip:</strong> For complex sessions with many notes, paste the brief into Claude Projects or attach it as context so you can iterate across multiple conversations without repeating the full brief.
+        </div>
+      </div>
+
+      <!-- Using with Cursor -->
+      <div class="section" id="using-with-cursor">
+        <h2>Using with Cursor</h2>
+        <p>Cursor's AI panel (Cmd+K or the chat sidebar) accepts the brief the same way Claude does. The selector format is particularly useful in Cursor because it maps directly to elements in your HTML/JSX.</p>
+
+        <h3>Workflow</h3>
+        <ol>
+          <li>Generate and copy the brief from Markup.</li>
+          <li>Open Cursor and use <strong>Cmd+Shift+L</strong> to open the AI chat.</li>
+          <li>Paste the brief with a framing instruction.</li>
+        </ol>
+
+        <pre><code>Fix the issues in this Markup review brief. Each issue has an exact CSS selector — use it to find the element. Fix Critical first.
+
+[PASTE BRIEF HERE]</code></pre>
+
+        <h3>CLAUDE.md integration</h3>
+        <p>If your project uses a <code>CLAUDE.md</code> (project context file for Claude/Cursor), you can paste the brief inline or reference it as a supplemental context block. This is especially useful for multi-session review workflows — add the brief to your <code>CLAUDE.md</code>, tell Cursor to fix the issues, then remove the brief once they're resolved.</p>
+
+        <div class="note-box">
+          <strong>Tip:</strong> Download the ZIP export (brief.md + images/) and drop the entire folder into your project root temporarily. This gives Cursor both the structured brief and the visual context of your screenshots in one paste.
+        </div>
+      </div>
+
+      <!-- Contributor Setup -->
+      <div class="section" id="contributor-setup">
+        <h2>Contributor Setup</h2>
+        <p>Before opening a PR, a few things to know about the project setup:</p>
+
+        <h3>Prerequisites</h3>
+        <ul>
+          <li><strong>Node.js 18+</strong> — check <code>.nvmrc</code> in the repo root for the pinned version. Run <code>nvm use</code> if you have nvm installed.</li>
+          <li><strong>npm</strong> — comes with Node. Run <code>npm install</code> after cloning.</li>
+          <li><strong>Chrome 114+</strong> — required for the Side Panel API (<code>chrome.sidePanel</code>). Chromium-based browsers (Edge, Brave) may work but are not tested.</li>
+        </ul>
+
+        <h3>Development workflow</h3>
+        <ol>
+          <li>Fork the repo on GitHub.</li>
+          <li>Clone your fork: <code>git clone https://github.com/YOUR_USERNAME/Markup.git</code></li>
+          <li>Install deps: <code>npm install</code></li>
+          <li>Build: <code>npm run build</code> — output goes to <code>dist/</code></li>
+          <li>Load unpacked in Chrome: <code>chrome://extensions</code> → Enable Developer Mode → Load unpacked → select <code>dist/</code></li>
+          <li>Make changes in <code>src/</code></li>
+          <li>Run <code>npm run build</code> after each change, then reload the extension in Chrome.</li>
+        </ol>
+
+        <h3>Automated tests</h3>
+        <p>There are currently no automated tests. QA is manual: load the extension unpacked, test the core loop (annotate → generate brief → export), and test in both Simple Mode and Dev Mode. If you're adding a feature, test on both <code>localhost:PORT</code> and a live <code>https://</code> site.</p>
+
+        <h3>PR expectations</h3>
+        <ul>
+          <li>One feature or fix per PR.</li>
+          <li>Describe what you changed and why in the PR description.</li>
+          <li>If you changed any storage keys, update the Storage Keys table in <code>CLAUDE.md</code>.</li>
+          <li>If you changed the note data model, update the Note Data Model section in <code>CLAUDE.md</code>.</li>
+        </ul>
+        <p>See <a href="https://github.com/noachlevin/Markup/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> for the full contributor guide.</p>
+      </div>
+
+      <!-- Key Architecture Notes -->
+      <div class="section" id="architecture">
+        <h2>Architecture Notes for Contributors</h2>
+        <p>A few patterns in the codebase that are non-obvious and worth understanding before touching anything:</p>
+
+        <h3>Content script ↔ sidebar message protocol</h3>
+        <p>The sidebar and the page are separate browsing contexts. They communicate exclusively via <code>chrome.runtime.sendMessage</code> (sidebar → content) and <code>chrome.runtime.onMessage</code> (content → sidebar). Every feature that crosses this boundary uses this protocol. Key message types:</p>
+        <ul>
+          <li><code>MARKUP_ACTIVATE</code> / <code>MARKUP_DEACTIVATE</code> — toggle element selection mode</li>
+          <li><code>ELEMENT_SELECTED</code> — content script reports selected element + selector</li>
+          <li><code>ELEMENT_DESELECTED</code> — element was deselected</li>
+          <li><code>CAPTURE_SCREENSHOT</code> — sent to background.js to trigger <code>captureVisibleTab</code></li>
+          <li><code>NOTE_TEXT_UPDATE</code> — floating input text passed from page to sidebar</li>
+        </ul>
+
+        <h3>The <code>ignoreNextDeselect</code> flag</h3>
+        <p><code>deactivate()</code> in content.js always fires <code>ELEMENT_DESELECTED</code>. When the sidebar sends <code>MARKUP_DEACTIVATE</code>, this flag is set first. The handler checks it to prevent <code>flushSave()</code> being called on deactivation (which would save a blank note). If you touch activation/deactivation flow, watch this flag carefully.</p>
+
+        <h3><code>deactivateReset()</code> vs <code>resetForm()</code></h3>
+        <p><code>deactivateReset()</code> preserves the current note textarea value (used when deactivation happens around a note in progress). <code>resetForm()</code> clears everything. Only call <code>resetForm()</code> after an explicit user action (save, cancel). Never call it on deactivation.</p>
+
+        <h3>Storage keys are URL-based, not tab-based</h3>
+        <p>All storage uses <code>normalizeUrl(url)</code> as the key — strips <code>#hash</code> and trailing slash. Notes survive tab closes and reopens. Domain-scoped operations scan all <code>markup_notes_</code> keys matching the hostname.</p>
+
+        <h3>Floating input for Wispr Flow</h3>
+        <p>Chrome's Side Panel is a separate browsing context. <code>focus()</code> from the sidebar cannot target page elements. To receive Wispr Flow voice input, a textarea is injected into the page by the content script (which lives in the page context). This floating input receives voice text and passes it to the sidebar via messaging.</p>
       </div>
 
       <!-- Changelog -->
