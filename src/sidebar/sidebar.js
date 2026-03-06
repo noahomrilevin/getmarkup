@@ -590,7 +590,7 @@ function updateEmptyState() {
     // Simple Mode empty state
     const text = document.createElement("p");
     text.className = "empty-state__body";
-    text.textContent = "Click anything on this page to leave a note.";
+    text.textContent = "Take a screenshot or type a note below to get started.";
     emptyState.append(text);
     return;
   }
@@ -714,14 +714,6 @@ function loadNotes() {
   return safeGet(key, []);
 }
 
-async function persistAllNotes() {
-  if (!currentNoteUrl) return;
-  const allKey = "markup_all_notes";
-  const existing = await safeGet(allKey, []);
-  const otherNotes = existing.filter((n) => n.url !== currentNoteUrl);
-  await safeSet({ [allKey]: [...otherNotes, ...notes] });
-}
-
 // Pass 7: Scan all markup_notes_* keys that share the same hostname
 async function loadAllDomainNotes(pageUrl) {
   if (!pageUrl) return [];
@@ -792,7 +784,6 @@ async function persistNotes() {
   if (!currentNoteUrl) return;
   const key = `markup_notes_${currentNoteUrl}`;
   await safeSet({ [key]: notes });
-  persistAllNotes(); // fire-and-forget
   updateBadge();     // Sprint 8 F2: sync badge count
   await checkStorageQuota(); // Sprint 8 F4: check quota after every write
 }
@@ -1988,7 +1979,6 @@ function buildSimpleBriefText() {
   const project = sessionTitle || tabTitle || "Unknown";
 
   const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
-  const isMultiUrl = briefDomainGroups.length > 1;
 
   let domainName = currentNoteUrl;
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
@@ -2039,7 +2029,6 @@ function buildBriefText() {
 
   const project = sessionTitle || tabTitle || "Unknown";
   const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
-  const isMultiUrl = briefDomainGroups.length > 1;
 
   let domainName = currentNoteUrl;
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
@@ -2175,7 +2164,6 @@ function buildBriefPanelHtml() {
   const project = sessionTitle || tabTitle || "Unknown";
 
   const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
-  const isMultiUrl = briefDomainGroups.length > 1;
 
   let domainName = currentNoteUrl;
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
@@ -2232,7 +2220,6 @@ function buildSimpleBriefPanelHtml() {
   const project = sessionTitle || tabTitle || "Unknown";
 
   const allBriefNotes = briefDomainGroups.flatMap((g) => g.notes);
-  const isMultiUrl = briefDomainGroups.length > 1;
 
   let domainName = currentNoteUrl;
   try { domainName = new URL(currentNoteUrl).hostname; } catch { /* */ }
@@ -2757,15 +2744,57 @@ downloadBriefReaderBtn.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-// Settings: Clear all notes for this page
+// Settings: Clear all notes for this domain (domain-wide)
 settingsClearAllBtn.addEventListener("click", async () => {
-  if (!confirm(`Delete all ${notes.length} note${notes.length === 1 ? "" : "s"} for this page?`)) return;
-  await writeBackup();
-  notes = [];
-  await persistNotes();
-  renderNotesList();
-  showToast("All notes cleared.");
-  hideSettings();
+  if (settingsClearAllBtn.dataset.confirming) return;
+
+  const allKeys = await new Promise((res) =>
+    chrome.storage.local.get(null, (items) => res(Object.keys(items)))
+  );
+  let hostname = "";
+  try { hostname = new URL(currentNoteUrl).hostname; } catch { /* */ }
+  const domainKeys = allKeys.filter(
+    (k) => k.startsWith("markup_notes_") && k.includes(hostname)
+  );
+  if (domainKeys.length === 0) {
+    showToast("No notes to clear.");
+    return;
+  }
+
+  const allItems = await new Promise((res) =>
+    chrome.storage.local.get(domainKeys, res)
+  );
+  const totalCount = domainKeys.reduce(
+    (sum, k) => sum + (allItems[k]?.length || 0), 0
+  );
+
+  const originalText = settingsClearAllBtn.textContent;
+  settingsClearAllBtn.textContent = `CONFIRM — DELETE ${totalCount} NOTE${totalCount === 1 ? "" : "S"}`;
+  settingsClearAllBtn.dataset.confirming = "true";
+
+  const resetBtn = () => {
+    settingsClearAllBtn.textContent = originalText;
+    delete settingsClearAllBtn.dataset.confirming;
+  };
+
+  const onConfirm = async () => {
+    await writeBackup();
+    await new Promise((res) => chrome.storage.local.remove(domainKeys, res));
+    notes = [];
+    renderNotesList();
+    showToast(`Cleared ${totalCount} note${totalCount === 1 ? "" : "s"} for ${hostname}.`);
+    resetBtn();
+    hideSettings();
+  };
+
+  settingsClearAllBtn.addEventListener("click", onConfirm, { once: true });
+
+  setTimeout(() => {
+    if (settingsClearAllBtn.dataset.confirming) {
+      resetBtn();
+      settingsClearAllBtn.removeEventListener("click", onConfirm);
+    }
+  }, 4000);
 });
 
 // Export JSON
