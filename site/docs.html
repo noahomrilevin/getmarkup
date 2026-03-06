@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Documentation — Markup</title>
-  <meta name="description" content="Complete documentation for Markup, the Chrome extension for annotating web pages with element-attached notes, screenshots, and AI briefs.">
+  <meta name="description" content="Complete documentation for Markup — install guide, annotation workflow, brief format reference, and contributor setup. Works on localhost, staging, and live sites." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://getmarkup.dev/docs" />
+  <meta property="og:title" content="Documentation — Markup" />
+  <meta property="og:description" content="User guide and contributor docs for Markup. Covers install, annotating, brief format, exporting, and how to build on the open-source codebase." />
+  <meta property="og:image" content="https://getmarkup.dev/og-image.png" />
   
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500&family=DM+Sans:opsz,wght@9..40,400;9..40,600&family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
   
@@ -157,6 +162,87 @@
       text-transform: uppercase;
       margin-bottom: 12px;
     }
+
+    /* Tab switcher */
+    .docs-tabs {
+      display: flex;
+      background: rgba(0,0,0,0.25);
+      border-radius: 8px;
+      padding: 3px;
+      margin-bottom: 32px;
+      gap: 2px;
+    }
+    .docs-tab {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: rgba(250,248,243,0.45);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      line-height: 1.3;
+      text-align: center;
+    }
+    .docs-tab:hover { color: var(--warm-white); }
+    .docs-tab.active {
+      background: var(--gold);
+      color: var(--deep-blue);
+      font-weight: 600;
+    }
+
+    /* Contributor zone divider */
+    .contrib-banner {
+      background: linear-gradient(135deg, var(--deep-blue) 0%, #1e3055 100%);
+      border-radius: 10px;
+      padding: 32px 36px;
+      margin-bottom: 48px;
+      border-left: 3px solid var(--gold);
+      position: relative;
+      overflow: hidden;
+    }
+    .contrib-banner::before {
+      content: '';
+      position: absolute;
+      top: -20px; right: -20px;
+      width: 120px; height: 120px;
+      background: radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .contrib-banner-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+    .contrib-banner h2 {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-style: italic;
+      color: var(--warm-white);
+      margin-bottom: 10px;
+      border: none;
+      padding: 0;
+    }
+    .contrib-banner p {
+      color: rgba(250,248,243,0.65);
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0 0 16px;
+    }
+    .contrib-banner a {
+      color: var(--gold);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .contrib-banner a:hover { text-decoration: underline; }
 
     .sidebar-section ul {
       list-style: none;
@@ -496,9 +582,15 @@
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-logo">Markup</div>
-      
+
+      <!-- Tab switcher -->
+      <div class="docs-tabs">
+        <button class="docs-tab active" data-tab="users">User Guide</button>
+        <button class="docs-tab" data-tab="contributors">Contributing</button>
+      </div>
+
       <!-- Getting Started -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="users">
         <div class="sidebar-section-title">Getting Started</div>
         <ul>
           <li><a href="#install">Install</a></li>
@@ -509,7 +601,7 @@
       </div>
 
       <!-- Annotating -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="users">
         <div class="sidebar-section-title">Annotating</div>
         <ul>
           <li><a href="#select-element">Select an element</a></li>
@@ -522,7 +614,7 @@
       </div>
 
       <!-- The Brief -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="users">
         <div class="sidebar-section-title">The Brief</div>
         <ul>
           <li><a href="#generating-brief">Generating a brief</a></li>
@@ -532,7 +624,7 @@
       </div>
 
       <!-- Storage -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="users">
         <div class="sidebar-section-title">Storage</div>
         <ul>
           <li><a href="#storage-how">How notes are stored</a></li>
@@ -542,16 +634,16 @@
       </div>
 
       <!-- Using with AI -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="users">
         <div class="sidebar-section-title">Using with AI</div>
         <ul>
           <li><a href="#using-with-claude">Using with Claude</a></li>
-          <li><a href="#using-with-cursor">Using with Cursor</a></li>
+          <li><a href="#using-with-cursor">Using with VS Code / Cursor</a></li>
         </ul>
       </div>
 
       <!-- Contributing -->
-      <div class="sidebar-section">
+      <div class="sidebar-section" data-tab="contributors">
         <div class="sidebar-section-title">Contributing</div>
         <ul>
           <li><a href="#contributor-setup">Setup &amp; workflow</a></li>
@@ -566,7 +658,7 @@
     <!-- Content Area -->
     <main class="content">
       <!-- Getting Started -->
-      <div class="section" id="install">
+      <div class="section" id="install" data-tab="users">
         <h2>Install</h2>
         <p>Markup runs as a Chrome extension locally on your machine. It works on <strong>localhost</strong>, <strong>file://</strong> URLs, and live <strong>https://</strong> sites.</p>
 
@@ -598,7 +690,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Your First Annotation -->
-      <div class="section" id="first-annotation">
+      <div class="section" id="first-annotation" data-tab="users">
         <h2>Your First Annotation</h2>
         <p>Here's the core loop — from opening the sidebar to saving your first note.</p>
 
@@ -620,7 +712,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Keyboard Shortcuts -->
-      <div class="section" id="keyboard-shortcuts">
+      <div class="section" id="keyboard-shortcuts" data-tab="users">
         <h2>Keyboard Shortcuts</h2>
         <p>Speed up your workflow with these keyboard shortcuts:</p>
 
@@ -647,7 +739,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Simple vs Dev Mode -->
-      <div class="section" id="simple-vs-dev">
+      <div class="section" id="simple-vs-dev" data-tab="users">
         <h2>Simple vs Dev Mode</h2>
         <p>Markup has two modes designed for different workflows:</p>
 
@@ -669,7 +761,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Select an Element -->
-      <div class="section" id="select-element">
+      <div class="section" id="select-element" data-tab="users">
         <h2>Select an Element</h2>
         <p><strong>Dev Mode only.</strong> Element selection lets you pinpoint exactly what you're annotating — a button, form field, navigation menu, or any other part of the page.</p>
 
@@ -700,7 +792,7 @@ cd markup</code></pre>
       </div>
 
       <!-- General Notes -->
-      <div class="section" id="general-notes">
+      <div class="section" id="general-notes" data-tab="users">
         <h2>General Notes</h2>
         <p>Not every note needs to be tied to a specific element. "General notes" are page-level feedback with no selector required.</p>
 
@@ -719,7 +811,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Screenshots -->
-      <div class="section" id="screenshots">
+      <div class="section" id="screenshots" data-tab="users">
         <h2>Screenshots</h2>
         <p>Screenshots are available in <strong>both Simple and Dev Mode</strong>. Capture a visual snippet of the page or element you're annotating.</p>
 
@@ -743,7 +835,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Voice Notes -->
-      <div class="section" id="voice-notes">
+      <div class="section" id="voice-notes" data-tab="users">
         <h2>Voice Notes (Wispr Flow)</h2>
         <p>Markup integrates with <strong>Wispr Flow</strong>, a voice-to-text tool for Chrome. Dictate your thoughts directly into the note textarea using your microphone.</p>
 
@@ -770,7 +862,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Note Types -->
-      <div class="section" id="note-types">
+      <div class="section" id="note-types" data-tab="users">
         <h2>Note Types</h2>
         <p><strong>Dev Mode only.</strong> Every note is tagged with a type that categorizes what you're reporting. This helps organize your brief and makes handoffs clearer.</p>
 
@@ -809,7 +901,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Severity Levels -->
-      <div class="section" id="severity">
+      <div class="section" id="severity" data-tab="users">
         <h2>Severity Levels</h2>
         <p><strong>Dev Mode only.</strong> Rank the urgency or impact of each note. Briefs sort by severity first, so critical issues bubble to the top.</p>
 
@@ -848,7 +940,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Generating a Brief -->
-      <div class="section" id="generating-brief">
+      <div class="section" id="generating-brief" data-tab="users">
         <h2>Generating a Brief</h2>
         <p>A "brief" is a formatted summary of all your notes for a page or domain. It's designed to be pasted into Claude, ChatGPT, Cursor, or any AI tool for code review and feedback synthesis.</p>
 
@@ -868,7 +960,7 @@ cd markup</code></pre>
       </div>
 
       <!-- Brief Format Reference -->
-      <div class="section" id="brief-format">
+      <div class="section" id="brief-format" data-tab="users">
         <h2>Brief Format Reference</h2>
         <p>Here's the exact markdown structure of a generated brief:</p>
 
@@ -937,7 +1029,7 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
       </div>
 
       <!-- Exporting -->
-      <div class="section" id="exporting">
+      <div class="section" id="exporting" data-tab="users">
         <h2>Exporting</h2>
         <p>Once you've generated a brief, you have several export options depending on your workflow.</p>
 
@@ -993,7 +1085,7 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
       </div>
 
       <!-- How Notes are Stored -->
-      <div class="section" id="storage-how">
+      <div class="section" id="storage-how" data-tab="users">
         <h2>How Notes Are Stored</h2>
         <p>Markup stores all notes locally in your browser using Chrome's storage API. No data is sent to the internet.</p>
 
@@ -1019,7 +1111,7 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
       </div>
 
       <!-- Backups -->
-      <div class="section" id="backups">
+      <div class="section" id="backups" data-tab="users">
         <h2>Backups</h2>
         <p>Markup automatically creates backups of your notes to protect against accidental deletion.</p>
 
@@ -1041,7 +1133,7 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
       </div>
 
       <!-- Clearing Notes -->
-      <div class="section" id="clearing">
+      <div class="section" id="clearing" data-tab="users">
         <h2>Clearing Notes</h2>
         <p>You have control over what gets deleted — domain-wide or per-note.</p>
 
@@ -1058,9 +1150,78 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
           <strong>Important:</strong> Clearing notes is permanent. Backups help, but rely on them as a last resort. Export your notes to file before doing major cleanup.
         </div>
       </div>
+      <!-- Using with Claude -->
+      <div class="section" id="using-with-claude" data-tab="users">
+        <h2>Using with Claude</h2>
+        <p>The brief output is designed to be pasted directly into a Claude conversation. Here's the workflow:</p>
+        <ol>
+          <li>Annotate your build — select elements, leave notes, set severity.</li>
+          <li>Click <strong>GENERATE BRIEF</strong> in the sidebar.</li>
+          <li>Click <strong>COPY TO CLIPBOARD</strong> or download the PDF/ZIP.</li>
+          <li>Open <a href="https://claude.ai" target="_blank" rel="noopener">Claude.ai</a> (or any Claude-based tool).</li>
+          <li>Paste the brief into a new conversation.</li>
+        </ol>
 
-      <!-- Project Structure -->
-      <div class="section" id="project-structure">
+        <h3>Suggested prompt framing</h3>
+        <p>The brief is self-explanatory, but framing your prompt helps Claude prioritize:</p>
+        <pre><code>Here's my review brief from Markup. Please fix all Critical and High issues first, then address Medium.
+Use the exact CSS selectors provided — they are the precise elements I'm pointing at.
+
+[PASTE BRIEF HERE]</code></pre>
+        <p>Or for a targeted fix:</p>
+        <pre><code>Fix only the Critical issues in this brief. Do not touch anything else.
+
+[PASTE BRIEF HERE]</code></pre>
+
+        <h3>Why it works well</h3>
+        <p>The brief format includes exact CSS selectors, element labels, parent context, and severity levels. Claude can map every issue to the correct line in your codebase without screenshots or ambiguous descriptions. The severity grouping tells Claude what to prioritize. The type labels (Bug / Design / Copy) tell it what kind of change is expected.</p>
+
+        <div class="note-box">
+          <strong>Tip:</strong> For complex sessions with many notes, paste the brief into Claude Projects or attach it as context so you can iterate across multiple conversations without repeating the full brief.
+        </div>
+      </div>
+
+      <!-- Using with VS Code / Cursor -->
+      <div class="section" id="using-with-cursor" data-tab="users">
+        <h2>Using with VS Code / Cursor</h2>
+        <p>The brief is designed to be pasted into any AI-assisted editor. The CSS selector format maps directly to elements in your HTML/JSX, making it easy for the AI to find exactly what needs fixing.</p>
+
+        <h3>In VS Code (Copilot, Continue, or any AI chat extension)</h3>
+        <ol>
+          <li>Generate and copy the brief from Markup.</li>
+          <li>Open the AI chat panel in VS Code.</li>
+          <li>Paste the brief with a framing prompt:</li>
+        </ol>
+
+        <pre><code>Fix the issues in this Markup review brief. Each issue includes an exact CSS selector — use it to find the element in the code. Fix Critical issues first.
+
+[PASTE BRIEF HERE]</code></pre>
+
+        <h3>In Cursor</h3>
+        <ol>
+          <li>Generate and copy the brief from Markup.</li>
+          <li>Open Cursor's AI chat with <strong>Cmd+Shift+L</strong>.</li>
+          <li>Paste the brief — Cursor will use the selectors to locate elements in your codebase.</li>
+        </ol>
+
+        <h3>Project context files (CLAUDE.md / .cursorrules)</h3>
+        <p>If your project uses a <code>CLAUDE.md</code> or <code>.cursorrules</code> file, paste the brief inline as a supplemental block. Tell your AI to fix the issues, then remove the brief once they're resolved. Useful for multi-session review workflows.</p>
+
+        <div class="note-box">
+          <strong>Tip:</strong> Download the ZIP export (brief.md + images/) and drop the folder into your project root temporarily. This gives your AI editor both the structured brief and the visual context of your screenshots in one operation.
+        </div>
+      </div>
+
+      <!-- Contributor Banner -->
+      <div class="contrib-banner" data-tab="contributors">
+        <div class="contrib-banner-eyebrow">Open Source</div>
+        <h2>Contributing to Markup</h2>
+        <p>Markup is MIT-licensed and open for contributions. This section covers how the codebase is structured, how to set up a dev environment, and the architectural patterns you need to understand before touching anything.</p>
+        <p><a href="https://github.com/noachlevin/Markup" target="_blank" rel="noopener">View on GitHub ↗</a></p>
+      </div>
+
+<!-- Project Structure -->
+      <div class="section" id="project-structure" data-tab="contributors">
         <h2>Project Structure</h2>
         <p>Markup is a Chrome Extension built with vanilla JavaScript and esbuild. Here's the layout:</p>
 
@@ -1092,8 +1253,8 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
         <p>Run <code>npm run build</code> to compile. esbuild minifies content.js and the sidebar assets are copied as-is. The <code>dist/</code> folder is what you load into Chrome.</p>
       </div>
 
-      <!-- Adding Note Types -->
-      <div class="section" id="adding-types">
+<!-- Adding Note Types -->
+      <div class="section" id="adding-types" data-tab="contributors">
         <h2>Adding Note Types</h2>
         <p>Want to add a new note type (e.g., "Performance", "Accessibility")? Here's where to add it:</p>
 
@@ -1126,65 +1287,11 @@ The blue (#1A2744) reads as too heavy. Consider #2D4A8A.
         <div class="note-box">
           <strong>Tip:</strong> Pick a color from the design tokens (gold, blue, slate, etc.) that visually matches the type's meaning. "Performance" might be orange/warning-adjacent, while "Accessibility" could be green/success.
         </div>
-      </div>
 
-      <!-- Using with Claude -->
-      <div class="section" id="using-with-claude">
-        <h2>Using with Claude</h2>
-        <p>The brief output is designed to be pasted directly into a Claude conversation. Here's the workflow:</p>
-        <ol>
-          <li>Annotate your build — select elements, leave notes, set severity.</li>
-          <li>Click <strong>GENERATE BRIEF</strong> in the sidebar.</li>
-          <li>Click <strong>COPY TO CLIPBOARD</strong> or download the PDF/ZIP.</li>
-          <li>Open <a href="https://claude.ai" target="_blank" rel="noopener">Claude.ai</a> (or any Claude-based tool).</li>
-          <li>Paste the brief into a new conversation.</li>
-        </ol>
-
-        <h3>Suggested prompt framing</h3>
-        <p>The brief is self-explanatory, but framing your prompt helps Claude prioritize:</p>
-        <pre><code>Here's my review brief from Markup. Please fix all Critical and High issues first, then address Medium.
-Use the exact CSS selectors provided — they are the precise elements I'm pointing at.
-
-[PASTE BRIEF HERE]</code></pre>
-        <p>Or for a targeted fix:</p>
-        <pre><code>Fix only the Critical issues in this brief. Do not touch anything else.
-
-[PASTE BRIEF HERE]</code></pre>
-
-        <h3>Why it works well</h3>
-        <p>The brief format includes exact CSS selectors, element labels, parent context, and severity levels. Claude can map every issue to the correct line in your codebase without screenshots or ambiguous descriptions. The severity grouping tells Claude what to prioritize. The type labels (Bug / Design / Copy) tell it what kind of change is expected.</p>
-
-        <div class="note-box">
-          <strong>Tip:</strong> For complex sessions with many notes, paste the brief into Claude Projects or attach it as context so you can iterate across multiple conversations without repeating the full brief.
-        </div>
-      </div>
-
-      <!-- Using with Cursor -->
-      <div class="section" id="using-with-cursor">
-        <h2>Using with Cursor</h2>
-        <p>Cursor's AI panel (Cmd+K or the chat sidebar) accepts the brief the same way Claude does. The selector format is particularly useful in Cursor because it maps directly to elements in your HTML/JSX.</p>
-
-        <h3>Workflow</h3>
-        <ol>
-          <li>Generate and copy the brief from Markup.</li>
-          <li>Open Cursor and use <strong>Cmd+Shift+L</strong> to open the AI chat.</li>
-          <li>Paste the brief with a framing instruction.</li>
-        </ol>
-
-        <pre><code>Fix the issues in this Markup review brief. Each issue has an exact CSS selector — use it to find the element. Fix Critical first.
-
-[PASTE BRIEF HERE]</code></pre>
-
-        <h3>CLAUDE.md integration</h3>
-        <p>If your project uses a <code>CLAUDE.md</code> (project context file for Claude/Cursor), you can paste the brief inline or reference it as a supplemental context block. This is especially useful for multi-session review workflows — add the brief to your <code>CLAUDE.md</code>, tell Cursor to fix the issues, then remove the brief once they're resolved.</p>
-
-        <div class="note-box">
-          <strong>Tip:</strong> Download the ZIP export (brief.md + images/) and drop the entire folder into your project root temporarily. This gives Cursor both the structured brief and the visual context of your screenshots in one paste.
-        </div>
       </div>
 
       <!-- Contributor Setup -->
-      <div class="section" id="contributor-setup">
+      <div class="section" id="contributor-setup" data-tab="contributors">
         <h2>Contributor Setup</h2>
         <p>Before opening a PR, a few things to know about the project setup:</p>
 
@@ -1220,7 +1327,7 @@ Use the exact CSS selectors provided — they are the precise elements I'm point
       </div>
 
       <!-- Key Architecture Notes -->
-      <div class="section" id="architecture">
+      <div class="section" id="architecture" data-tab="contributors">
         <h2>Architecture Notes for Contributors</h2>
         <p>A few patterns in the codebase that are non-obvious and worth understanding before touching anything:</p>
 
@@ -1248,7 +1355,7 @@ Use the exact CSS selectors provided — they are the precise elements I'm point
       </div>
 
       <!-- Changelog -->
-      <div class="section" id="changelog-link">
+      <div class="section" id="changelog-link" data-tab="contributors">
         <h2>Changelog</h2>
         <p>See the full release history and what shipped in each version:</p>
         <p><strong><a href="/changelog">View the Changelog</a></strong></p>
@@ -1279,46 +1386,77 @@ Use the exact CSS selectors provided — they are the precise elements I'm point
   </footer>
 
   <script>
-    // Navbar scroll effect
+    /* ── NAVBAR ──────────────────────────────────────────────────────── */
     const navbar = document.getElementById('navbar');
     window.addEventListener('scroll', () => {
-      if (window.scrollY > 10) {
-        navbar.classList.add('scrolled');
-      } else {
-        navbar.classList.remove('scrolled');
-      }
-    });
+      navbar.classList.toggle('scrolled', window.scrollY > 10);
+    }, { passive: true });
 
-    // Sidebar active link tracking
-    const sidebarLinks = document.querySelectorAll('.sidebar-section a');
-    const sections = document.querySelectorAll('.section');
+    /* ── DOCS TAB SWITCHER ───────────────────────────────────────────── */
+    const tabBtns = document.querySelectorAll('.docs-tab');
+    const userSides = document.querySelectorAll('.sidebar-section[data-tab="users"]');
+    const contribSides = document.querySelectorAll('.sidebar-section[data-tab="contributors"]');
+    const userSects = document.querySelectorAll('.section[data-tab="users"]');
+    const contribSects = document.querySelectorAll('.section[data-tab="contributors"]');
+    const contribBanners = document.querySelectorAll('.contrib-banner[data-tab="contributors"]');
 
-    window.addEventListener('scroll', () => {
+    function setTab(tab) {
+      tabBtns.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      const showUser = tab === 'users';
+      userSides.forEach(s => s.style.display = showUser ? '' : 'none');
+      contribSides.forEach(s => s.style.display = showUser ? 'none' : '');
+      userSects.forEach(s => s.style.display = showUser ? '' : 'none');
+      contribSects.forEach(s => s.style.display = showUser ? 'none' : '');
+      contribBanners.forEach(b => b.style.display = showUser ? 'none' : '');
+      // Scroll to top of content when switching tabs
+      document.querySelector('.content').scrollTop = 0;
+    }
+
+    tabBtns.forEach(btn => btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      setTab(tab);
+      history.replaceState(null, '', tab === 'contributors' ? '#contributing' : window.location.pathname);
+    }));
+
+    // Determine tab from URL hash
+    const contribHashes = new Set(['#contributing', '#contributor-setup', '#architecture',
+      '#project-structure', '#adding-types', '#changelog-link']);
+    const initTab = contribHashes.has(window.location.hash) ? 'contributors' : 'users';
+    setTab(initTab);
+
+    // Scroll to hash section after tab switch
+    if (window.location.hash && document.querySelector(window.location.hash)) {
+      setTimeout(() => {
+        document.querySelector(window.location.hash).scrollIntoView({ behavior: 'smooth' });
+      }, 80);
+    }
+
+    /* ── SIDEBAR ACTIVE LINK TRACKING ───────────────────────────────── */
+    const content = document.querySelector('.content');
+
+    function updateActiveLink() {
+      const visibleSections = Array.from(document.querySelectorAll('.section[data-tab]'))
+        .filter(s => s.style.display !== 'none');
       let current = '';
-      sections.forEach(section => {
-        const sectionTop = section.offsetTop - 120;
-        if (window.scrollY >= sectionTop) {
+      visibleSections.forEach(section => {
+        if (content.scrollTop >= section.offsetTop - 140) {
           current = section.getAttribute('id');
         }
       });
-
-      sidebarLinks.forEach(link => {
-        link.classList.remove('active');
-        if (link.getAttribute('href') === `#${current}`) {
-          link.classList.add('active');
-        }
+      document.querySelectorAll('.sidebar-section a').forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
       });
-    });
+    }
 
-    // Smooth scroll for sidebar links
-    sidebarLinks.forEach(link => {
+    content.addEventListener('scroll', updateActiveLink, { passive: true });
+
+    /* ── SMOOTH SCROLL FOR SIDEBAR LINKS ────────────────────────────── */
+    document.querySelectorAll('.sidebar-section a').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const targetId = link.getAttribute('href').substring(1);
-        const targetSection = document.getElementById(targetId);
-        if (targetSection) {
-          targetSection.scrollIntoView({ behavior: 'smooth' });
-        }
+        const target = document.getElementById(targetId);
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
       });
     });
   </script>

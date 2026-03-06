@@ -4,6 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markup — Annotate any page. Generate a fix brief.</title>
+  <meta name="description" content="Markup is a Chrome extension that lets you annotate any page — localhost, staging, or live — and generate a structured fix brief to paste into Claude, VS Code, or Cursor. No AI, no API, runs entirely in your browser." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://getmarkup.dev/" />
+  <meta property="og:title" content="Markup — Annotate any page. Generate a fix brief." />
+  <meta property="og:description" content="Annotate localhost, staging, or live sites. Capture element-attached notes and screenshots. Generate a structured brief for Claude or Cursor. No AI, no API, runs offline." />
+  <meta property="og:image" content="https://getmarkup.dev/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@GetMarkupDev" />
+  <meta name="twitter:title" content="Markup — Annotate any page. Generate a fix brief." />
+  <meta name="twitter:description" content="Chrome extension for annotating any page and generating AI-ready fix briefs. Works on localhost. No AI, no API." />
+  <meta name="twitter:image" content="https://getmarkup.dev/og-image.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,700;1,400;1,700&display=swap" rel="stylesheet" />
@@ -1124,30 +1135,29 @@
         <span class="docs-nav-logo">Markup</span>
         <div class="docs-group">
           <span class="docs-group-label">GETTING STARTED</span>
-          <a class="docs-link">Install from Chrome Store</a>
-          <a class="docs-link">Your first annotation</a>
-          <a class="docs-link">Keyboard shortcuts</a>
+          <a class="docs-link" href="/docs#install">Install</a>
+          <a class="docs-link" href="/docs#first-annotation">Your first annotation</a>
+          <a class="docs-link" href="/docs#keyboard-shortcuts">Keyboard shortcuts</a>
         </div>
         <div class="docs-group">
-          <span class="docs-group-label">CONCEPTS</span>
-          <a class="docs-link">How it works</a>
-          <a class="docs-link">Note types &amp; severity</a>
-          <a class="docs-link">Storage model</a>
-          <a class="docs-link">Dev vs Simple mode</a>
+          <span class="docs-group-label">ANNOTATING</span>
+          <a class="docs-link" href="/docs#select-element">Select an element</a>
+          <a class="docs-link" href="/docs#screenshots">Screenshots</a>
+          <a class="docs-link" href="/docs#voice-notes">Voice notes</a>
+          <a class="docs-link" href="/docs#note-types">Note types &amp; severity</a>
         </div>
         <div class="docs-group">
-          <span class="docs-group-label">BRIEF FORMAT</span>
-          <a class="docs-link on">Format reference</a>
-          <a class="docs-link">Example brief</a>
-          <a class="docs-link">Using with Claude</a>
-          <a class="docs-link">Using with Cursor</a>
+          <span class="docs-group-label">THE BRIEF</span>
+          <a class="docs-link on" href="/docs#brief-format">Format reference</a>
+          <a class="docs-link" href="/docs#exporting">Exporting</a>
+          <a class="docs-link" href="/docs#using-with-claude">Using with Claude</a>
+          <a class="docs-link" href="/docs#using-with-cursor">Using with VS Code / Cursor</a>
         </div>
         <div class="docs-group">
           <span class="docs-group-label">CONTRIBUTING</span>
-          <a class="docs-link">Getting started</a>
-          <a class="docs-link">Project structure</a>
-          <a class="docs-link">Adding note types</a>
-          <a class="docs-link">Changelog</a>
+          <a class="docs-link" href="/docs#contributing">Setup &amp; workflow</a>
+          <a class="docs-link" href="/docs#contributing">Architecture notes</a>
+          <a class="docs-link" href="/changelog">Changelog</a>
         </div>
       </div>
       <!-- content -->
@@ -1179,6 +1189,9 @@
           <span class="docs-pill">MIT license</span>
         </div>
       </div>
+    </div>
+    <div style="margin-top:28px; text-align:right;">
+      <a href="/docs" style="font-family:var(--font-mono); font-size:13px; color:var(--gold); text-decoration:none; letter-spacing:0.05em; opacity:0.85; transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">View full documentation →</a>
     </div>
   </div>
 </section>
@@ -1288,32 +1301,20 @@ function setWalkthrough(n) {
   document.querySelectorAll('.how-step').forEach((s, i) => s.classList.toggle('on', i === n));
 }
 
-const stepObs = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) setWalkthrough(parseInt(e.target.dataset.w) - 1);
+/* How It Works — scroll-driven step sync (focal point at 45% of viewport) */
+function syncHowStep() {
+  const steps = Array.from(document.querySelectorAll('.how-step'));
+  if (!steps.length) return;
+  const focal = window.scrollY + window.innerHeight * 0.45;
+  let active = 0;
+  steps.forEach((s, i) => {
+    const top = s.getBoundingClientRect().top + window.scrollY;
+    if (top <= focal) active = i;
   });
-}, { threshold: 0.55 });
-document.querySelectorAll('.how-step').forEach(s => stepObs.observe(s));
-
-/* ── COUNTER ANIMATIONS ──────────────────────────────────────────── */
-function countUp(el, target, ms) {
-  let v = 0;
-  const step = Math.max(1, Math.ceil(target / (ms / 16)));
-  const t = setInterval(() => {
-    v = Math.min(v + step, target);
-    el.textContent = v;
-    if (v >= target) clearInterval(t);
-  }, 16);
+  setWalkthrough(active);
 }
-const cntObs = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.querySelectorAll('.counter').forEach(c => countUp(c, +c.dataset.to, 1100));
-      cntObs.unobserve(e.target);
-    }
-  });
-}, { threshold: 0.3 });
-document.querySelectorAll('.stats-grid').forEach(g => cntObs.observe(g));
+window.addEventListener('scroll', syncHowStep, { passive: true });
+syncHowStep();
 
 /* ── BRIEF TYPEWRITER ────────────────────────────────────────────── */
 let briefFired = false;
