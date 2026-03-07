@@ -6,3 +6,7 @@ reviewbrief/
 dist/
 *.pdf
 site-mockup.html
+pass-*.md
+docs/SCREENSHOTS.md
+docs/landing-page-draft.html
+docs/screenshot-mockups.html

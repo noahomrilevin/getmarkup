@@ -4,7 +4,7 @@
 
 Chrome extension for annotating web pages. Side panel UI, content script selection, Wispr Flow voice notes, brief generation, screenshot capture.
 
-**Current Sprint:** Sprint 11 (Pass 18 in progress)
+**Current Sprint:** Sprint 11 Complete (Pass 23 done) — Pre-launch
 
 ---
 
@@ -109,7 +109,7 @@ Four levels: Critical / High / Medium (default) / Low.
 | 7b | Critical stability pass — 9 bugs fixed (URL-keyed storage, file:// support, activation sync, edit dedup, selector row visibility, deactivate reset, note label, session title persistence, backup safety net) |
 | 9 | Full design system pass — logotype, filter tabs, note cards, severity system, brief output, settings, Simple Mode, edit mode, archive panel, bottom bar, export buttons, ESC pill, abbreviated filter tabs |
 | 10 | Auto-save bug fix (ignoreNextDeselect), severity/type reset fix, Simple-first onboarding (default Simple, welcome card), self-hosted fonts, floating in-page note input (Chrome focus boundary fix), multi-page URL group headers, domain-scoped brief, domain-wide clear + individual delete, save-before-switch prompt, settings footer, HTML report logotype |
-| 11 | Brief archive (last 20 per domain), brief sort toggle (severity/chronological), JSON + CSV export, location field (both modes), selector improvement (ID→class→semantic→fallback, skip Tailwind/framework attrs), note context enrichment (parentContext, elementRole, fullText), image paste + folder picker (File System Access API), note thumbnails + lightbox, ZIP with images, screenshot drag-to-select overlay, Wispr Flow settings section, voice notes link, panel mutual exclusion, clear-all confirmation, bottom bar flex-wrap fix, SELECT ELEMENT hidden in Simple Mode, mode chip → direct toggle with one-time Dev Mode toast, PDF export (replaces HTML) |
+| 11 ✅ | Brief archive (last 20 per domain), brief sort toggle (severity/chronological), JSON + CSV export, location field (both modes), selector improvement (ID→class→semantic→fallback, skip Tailwind/framework attrs), note context enrichment (parentContext, elementRole, fullText), image paste + folder picker (File System Access API), note thumbnails + lightbox, ZIP with images, screenshot drag-to-select overlay, Wispr Flow settings section, voice notes link, panel mutual exclusion, clear-all confirmation, bottom bar flex-wrap fix, SELECT ELEMENT hidden in Simple Mode, mode chip → direct toggle with one-time Dev Mode toast, PDF export (replaces HTML) |
 
 ---
 
@@ -137,7 +137,7 @@ Four levels: Critical / High / Medium (default) / Low.
 ## Product Context
 
 - **Product:** Markup — getmarkup.dev
-- **Repo:** github.com/noachlevin/getmarkup
+- **Repo:** github.com/noahomrilevin/getmarkup
 - **Builder:** Noah Levin, CPO. One working hand, voice-first workflow via Wispr Flow.
 - **Workflow:** Move fast, stay minimal, ship session by session.
 - **Full loop (working):** Open sidebar → note-taking view → (Dev Mode: hover to preview → click to select element) → voice note via Wispr Flow into floating input OR type in sidebar → save → (optional: screenshot with drag-to-select) → generate Brief → copy or download PDF/ZIP.
@@ -163,7 +163,8 @@ SemVer: `MAJOR.MINOR.PATCH`
 
 | Version | Milestone |
 |---|---|
-| `0.9.0` | Current — Sprint 11 |
+| `0.9.1` | Current — Sprint 11 complete + pre-launch bug fixes |
+| `0.9.0` | Sprint 11 shipped |
 | `1.0.0` | Chrome Web Store launch |
 | `1.1.0` | Post-launch: single-issue quick-copy, V2 polish based on user feedback |
 | `2.0.0` | Think Aloud (built-in mic, real-time voice notes) |
@@ -286,14 +287,14 @@ EOD    — Note install count, top questions, first bug reports
 
 ## Known Code Issues — Pending Fix
 
-These are confirmed bugs in the current codebase as of Sprint 11 Pass 18, verified against actual source files. Address in the next code pass.
+All Sprint 11 known bugs resolved in Pass 23. No confirmed open bugs as of v0.9.1.
 
-| # | File | Issue | Impact |
-|---|---|---|---|
-| 1 | `sidebar.js` ~2459 | PDF export template still calls `@import url('https://fonts.googleapis.com/css2?...')` — external network call, breaks offline/privacy environments | Medium — PDF not self-contained |
-| 2 | `sidebar.js` `persistAllNotes()` | Writes to orphaned `markup_all_notes` storage key that nothing reads — wastes quota | Low — silent, no UX impact |
-| 3 | `sidebar.js` | `isMultiUrl` declared 5× across brief-building functions, never referenced after declaration | Low — dead code only |
-| 4 | `sidebar.js` `settingsClearAllBtn` | Settings "Clear All Notes" uses browser-native `confirm()` and only clears current page's notes, not domain-wide — inconsistent with inline clear-all behavior | Medium — UX inconsistency |
+| # | File | Issue | Impact | Status |
+|---|---|---|---|---|
+| 1 | `sidebar.js` | PDF Google Fonts @import | Medium | ✅ Fixed Pass 22 |
+| 2 | `sidebar.js` | `persistAllNotes()` orphaned key | Low | ✅ Fixed Pass 23 |
+| 3 | `sidebar.js` | `isMultiUrl` dead declarations | Low | ✅ Fixed Pass 23 |
+| 4 | `sidebar.js` | Settings clear-all page-only scope | Medium | ✅ Fixed Pass 23 |
 
 ---
 
