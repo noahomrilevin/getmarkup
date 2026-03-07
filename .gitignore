@@ -5,8 +5,11 @@ reviewbrief/
 *.pen
 dist/
 *.pdf
+*.zip
 site-mockup.html
 pass-*.md
 docs/SCREENSHOTS.md
 docs/landing-page-draft.html
 docs/screenshot-mockups.html
+markup-extension/
+site/Markup/
