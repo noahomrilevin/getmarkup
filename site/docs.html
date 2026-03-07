@@ -167,35 +167,60 @@
     /* Tab switcher */
     .docs-tabs {
       display: flex;
-      background: rgba(0,0,0,0.25);
-      border-radius: 8px;
-      padding: 3px;
-      margin-bottom: 32px;
-      gap: 2px;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid rgba(250,248,243,0.1);
+      padding-bottom: 24px;
+    }
+    .docs-tabs-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(250,248,243,0.3);
+      margin-bottom: 4px;
     }
     .docs-tab {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: rgba(250,248,243,0.45);
-      font-family: var(--font-mono);
-      font-size: 10.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(250,248,243,0.08);
+      color: rgba(250,248,243,0.5);
+      font-family: var(--font-body);
+      font-size: 13px;
       font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 8px 6px;
+      padding: 10px 14px;
       border-radius: 6px;
       cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-      line-height: 1.3;
-      text-align: center;
+      transition: all 0.15s;
+      text-align: left;
+      width: 100%;
     }
-    .docs-tab:hover { color: var(--warm-white); }
+    .docs-tab .tab-icon {
+      font-size: 15px;
+      line-height: 1;
+    }
+    .docs-tab .tab-label { flex: 1; }
+    .docs-tab .tab-sub {
+      font-size: 10.5px;
+      color: rgba(250,248,243,0.3);
+      font-family: var(--font-mono);
+      display: block;
+      margin-top: 1px;
+    }
+    .docs-tab:hover {
+      background: rgba(255,255,255,0.07);
+      color: var(--warm-white);
+      border-color: rgba(250,248,243,0.15);
+    }
     .docs-tab.active {
-      background: var(--gold);
-      color: var(--deep-blue);
-      font-weight: 600;
+      background: rgba(201,168,76,0.12);
+      border-color: var(--gold);
+      color: var(--warm-white);
     }
+    .docs-tab.active .tab-sub { color: rgba(201,168,76,0.7); }
 
     /* Contributor zone divider */
     .contrib-banner {
@@ -586,8 +611,21 @@
 
       <!-- Tab switcher -->
       <div class="docs-tabs">
-        <button class="docs-tab active" data-tab="users">User Guide</button>
-        <button class="docs-tab" data-tab="contributors">Contributing</button>
+        <div class="docs-tabs-label">Documentation</div>
+        <button class="docs-tab active" data-tab="users">
+          <span class="tab-icon">📖</span>
+          <span class="tab-label">
+            User Guide
+            <span class="tab-sub">Install, annotate, generate briefs</span>
+          </span>
+        </button>
+        <button class="docs-tab" data-tab="contributors">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-label">
+            Developer Docs
+            <span class="tab-sub">Architecture, contributing, building</span>
+          </span>
+        </button>
       </div>
 
       <!-- Getting Started -->
@@ -661,33 +699,26 @@
       <!-- Getting Started -->
       <div class="section" id="install" data-tab="users">
         <h2>Install</h2>
-        <p>Markup runs as a Chrome extension locally on your machine. It works on <strong>localhost</strong>, <strong>file://</strong> URLs, and live <strong>https://</strong> sites.</p>
+        <p>Markup is a Chrome extension. It runs entirely in your browser — no account, no backend, no API key required. It works on <strong>localhost</strong>, <strong>file://</strong> URLs, and live <strong>https://</strong> sites.</p>
 
-        <h3>Installation Steps</h3>
+        <h3>Install from the Chrome Web Store</h3>
         <ol class="step-list">
-          <li><strong>Clone the repository</strong>
-            <pre><code>git clone https://github.com/noachlevin/markup.git
-cd markup</code></pre>
+          <li><strong>Open the Chrome Web Store listing</strong>
+            <p><a href="https://chrome.google.com/webstore/detail/markup" target="_blank" rel="noopener" class="inline-link">Add Markup to Chrome →</a></p>
           </li>
-          <li><strong>Install dependencies</strong>
-            <pre><code>npm install</code></pre>
+          <li><strong>Click "Add to Chrome"</strong>
+            <p>Chrome will ask for permission to read and modify page content. This is required for the annotation overlay to work.</p>
           </li>
-          <li><strong>Build the extension</strong>
-            <pre><code>npm run build</code></pre>
-            <p>This creates a <code>dist/</code> folder with the compiled extension.</p>
-          </li>
-          <li><strong>Load into Chrome</strong>
-            <p>Open <code>chrome://extensions</code> in a new tab.</p>
-          </li>
-          <li><strong>Enable Developer Mode</strong>
-            <p>Toggle the switch in the top-right corner.</p>
-          </li>
-          <li><strong>Load unpacked</strong>
-            <p>Click "Load unpacked" and select the <code>dist/</code> folder from your cloned repo.</p>
+          <li><strong>Pin the extension</strong>
+            <p>Click the puzzle-piece icon in your toolbar, find Markup, and click the pin icon. This puts the Markup icon in your toolbar for one-click access.</p>
           </li>
         </ol>
 
-        <p>You should now see the Markup icon in your Chrome toolbar. You're ready to start annotating.</p>
+        <p>That's it. Click the Markup icon on any page to open the sidebar and start annotating.</p>
+
+        <div class="note-box">
+          <strong>Note:</strong> Markup works on any page Chrome can load, including <code>localhost</code> and <code>file://</code> URLs. No special setup required for local development.
+        </div>
       </div>
 
       <!-- Your First Annotation -->
@@ -1218,7 +1249,7 @@ Use the exact CSS selectors provided — they are the precise elements I'm point
         <div class="contrib-banner-eyebrow">Open Source</div>
         <h2>Contributing to Markup</h2>
         <p>Markup is MIT-licensed and open for contributions. This section covers how the codebase is structured, how to set up a dev environment, and the architectural patterns you need to understand before touching anything.</p>
-        <p><a href="https://github.com/noachlevin/Markup" target="_blank" rel="noopener">View on GitHub ↗</a></p>
+        <p><a href="https://github.com/noahomrilevin/getmarkup" target="_blank" rel="noopener">View on GitHub ↗</a></p>
       </div>
 
 <!-- Project Structure -->
@@ -1324,7 +1355,7 @@ Use the exact CSS selectors provided — they are the precise elements I'm point
           <li>If you changed any storage keys, update the Storage Keys table in <code>CLAUDE.md</code>.</li>
           <li>If you changed the note data model, update the Note Data Model section in <code>CLAUDE.md</code>.</li>
         </ul>
-        <p>See <a href="https://github.com/noachlevin/Markup/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> for the full contributor guide.</p>
+        <p>See <a href="https://github.com/noahomrilevin/getmarkup/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> for the full contributor guide.</p>
       </div>
 
       <!-- Key Architecture Notes -->
