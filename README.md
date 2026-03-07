@@ -7,7 +7,7 @@ Annotate any web page and generate structured AI fix briefs. A Chrome extension 
 ## What it does
 
 - Turn Markup on and click any element on the page to select it
-- Leave a typed or voice note (works with [Wispr Flow](https://wispr.flow)) tagged as Bug, Design, Copy, Question, or General
+- Leave a typed or voice note (works with [Wispr Flow](https://ref.wisprflow.ai/noah-levin-fctx)) tagged as Bug, Design, Copy, Question, or General
 - Save notes without selecting an element for general reactions
 - All notes persist per URL in local storage
 - Generate an AI brief from your notes to paste into Claude, Cursor, or ChatGPT
