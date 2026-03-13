@@ -2476,112 +2476,29 @@ ${content}
 </html>`;
 }
 
-// ─── Export as PDF via html2canvas + jsPDF (Pass 20) ─────────────
-downloadHtmlBtn.addEventListener("click", async () => {
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    showToast("PDF unavailable — try Export MD + Images instead");
-    return;
-  }
-  if (!window.html2canvas) {
-    showToast("PDF renderer not loaded — try Export MD + Images instead");
-    return;
-  }
-
+// ─── Export as PDF via print dialog (MV3-compliant, no external libs) ────
+downloadHtmlBtn.addEventListener("click", () => {
   const allDomainNotes = briefDomainGroups.flatMap((g) => g.notes);
   if (allDomainNotes.length === 0) {
     showToast("No notes to export");
     return;
   }
 
-  const html = generateHtmlReport();
+  // Inject auto-print script into the HTML report before </head>
+  const html = generateHtmlReport().replace(
+    "</head>",
+    `<script>window.onload = function() { window.print(); };<\/script></head>`
+  );
 
-  // Create hidden iframe to render the report at a wider width
-  const iframe = document.createElement("iframe");
-  Object.assign(iframe.style, {
-    position: "fixed",
-    top: "-9999px",
-    left: "-9999px",
-    width: "900px",
-    height: "1px",
-    border: "none",
-    visibility: "hidden",
-  });
-  document.body.appendChild(iframe);
-
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
-
-  // Wait for images to load
-  await new Promise((resolve) => {
-    const imgs = iframe.contentDocument.querySelectorAll("img");
-    if (!imgs.length) { resolve(); return; }
-    let loaded = 0;
-    const done = () => { if (++loaded === imgs.length) resolve(); };
-    imgs.forEach((img) => {
-      if (img.complete) done();
-      else { img.onload = done; img.onerror = done; }
-    });
-    setTimeout(resolve, 3000); // fallback
+  // Open in a new tab using a blob URL (no remote code, fully local)
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  chrome.tabs.create({ url }, () => {
+    // Revoke after a short delay to allow the tab to load
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   });
 
-  // Adjust iframe height to full content
-  const body = iframe.contentDocument.body;
-  iframe.style.height = body.scrollHeight + "px";
-  await new Promise((r) => setTimeout(r, 100)); // allow reflow
-
-  try {
-    const canvas = await window.html2canvas(body, {
-      scale: 1.5,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#FFFEF9",
-      width: 900,
-      windowWidth: 900,
-    });
-
-    document.body.removeChild(iframe);
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-
-    const imgW = canvas.width;
-    const imgH = canvas.height;
-    const ratio = pageW / imgW;
-    const scaledH = imgH * ratio;
-
-    let yOffset = 0;
-    let pagesAdded = 0;
-
-    while (yOffset < scaledH) {
-      if (pagesAdded > 0) doc.addPage();
-      const srcY = yOffset / ratio;
-      const srcH = Math.min(pageH / ratio, imgH - srcY);
-      const pageCanvas = document.createElement("canvas");
-      pageCanvas.width = imgW;
-      pageCanvas.height = Math.ceil(srcH);
-      const ctx = pageCanvas.getContext("2d");
-      ctx.drawImage(canvas, 0, Math.floor(srcY), imgW, Math.ceil(srcH), 0, 0, imgW, Math.ceil(srcH));
-      const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
-      const sliceH = Math.ceil(srcH) * ratio;
-      doc.addImage(imgData, "JPEG", 0, 0, pageW, sliceH);
-      yOffset += pageH;
-      pagesAdded++;
-    }
-
-    const briefDomain = document.getElementById("brief-edit-domain")?.textContent?.trim() || (() => {
-      try { return new URL(currentNoteUrl).hostname; } catch { return "brief"; }
-    })();
-    const today = new Date().toISOString().split("T")[0];
-    doc.save(`markup-brief-${briefDomain}-${today}.pdf`);
-
-  } catch (err) {
-    if (document.body.contains(iframe)) document.body.removeChild(iframe);
-    console.error("Markup: PDF export failed", err);
-    showToast("PDF export failed — try Export MD + Images instead");
-  }
+  showToast("Opening print dialog…");
 });
 
 closeBriefBtn.addEventListener("click", hideBrief);
