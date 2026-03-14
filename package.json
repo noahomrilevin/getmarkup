@@ -7,7 +7,6 @@
   },
   "dependencies": {
     "css-selector-generator": "^3.6.5",
-    "html2canvas": "^1.4.1",
     "jszip": "^3.10.1"
   },
   "devDependencies": {
