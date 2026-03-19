@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Markup — Video Frames</title>
+<style>
+/* ── Self-hosted fonts (relative to dist/fonts from this file's location) ── */
+@font-face { font-family:'DM Sans'; font-weight:400; src:url('../../dist/fonts/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2') format('woff2'); }
+@font-face { font-family:'DM Sans'; font-weight:500; src:url('../../dist/fonts/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2') format('woff2'); }
+@font-face { font-family:'DM Sans'; font-weight:700; src:url('../../dist/fonts/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2') format('woff2'); }
+@font-face { font-family:'DM Mono';  font-weight:400; src:url('../../dist/fonts/aFTU7PB1QTsUX8KYthqQBK6PYK0.woff2') format('woff2'); }
+@font-face { font-family:'Playfair Display'; font-style:italic; font-weight:700; src:url('../../dist/fonts/nuFkD-vYSZviVYUb_rj3ij__anPXDTnogkk7yRZrPA.woff2') format('woff2'); }
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+:root {
+  --ink:        #121218;
+  --paper:      #fffcfc;
+  --gold:       #d4af50;
+  --deep-blue:  #121a3a;
+  --mid-blue:   #24377a;
+  --slate:      #6e768c;
+  --warm-white: #f8f6f0;
+  --font-body:  'DM Sans', system-ui, sans-serif;
+  --font-mono:  'DM Mono', monospace;
+  --font-disp:  'Playfair Display', Georgia, serif;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a1a1e;
+  font-family: var(--font-body);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Slideshow shell ── */
+.slides { width: 1280px; height: 800px; position: relative; }
+.slide  { width: 1280px; height: 800px; position: absolute; top: 0; left: 0; display: none; overflow: hidden; }
+.slide.active { display: block; }
+
+/* ── Nav UI ── */
+.nav {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center;
+  background: rgba(0,0,0,0.7); border-radius: 24px; padding: 8px 16px;
+  color: white; font-family: var(--font-body); font-size: 13px; z-index: 9999;
+}
+.nav button {
+  background: #333; border: none; color: white; padding: 4px 12px;
+  border-radius: 12px; cursor: pointer; font-size: 13px;
+}
+.nav button:hover { background: #555; }
+.nav .label { opacity: .7; min-width: 140px; text-align: center; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHROME FRAME
+══════════════════════════════════════════════════════════════════════════ */
+.chrome {
+  width: 1280px; height: 800px;
+  background: #202124;
+  display: flex; flex-direction: column;
+}
+.chrome-titlebar {
+  height: 36px; background: #35363a;
+  display: flex; align-items: flex-end;
+  padding: 0 8px; gap: 0; flex-shrink: 0;
+}
+.chrome-tab {
+  height: 28px; min-width: 200px; max-width: 240px;
+  background: #202124; border-radius: 8px 8px 0 0;
+  display: flex; align-items: center; padding: 0 12px; gap: 8px;
+  font-size: 12px; color: #e8eaed;
+}
+.chrome-tab svg { width: 14px; height: 14px; opacity: .7; }
+.chrome-tab-x { margin-left: auto; opacity: .5; font-size: 14px; }
+.chrome-inactive-tab {
+  height: 26px; min-width: 140px;
+  background: transparent; border-radius: 8px 8px 0 0;
+  display: flex; align-items: center; padding: 0 12px;
+  font-size: 12px; color: #9aa0a6; margin-bottom: 2px;
+}
+.chrome-addressbar {
+  height: 40px; background: #202124;
+  display: flex; align-items: center; padding: 0 16px; gap: 10px;
+  flex-shrink: 0;
+}
+.chrome-back, .chrome-fwd, .chrome-reload {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #9aa0a6; font-size: 16px; cursor: default;
+}
+.chrome-url {
+  flex: 1; height: 28px; background: #303134; border-radius: 14px;
+  display: flex; align-items: center; padding: 0 12px;
+  font-size: 13px; color: #e8eaed; gap: 6px;
+}
+.chrome-url .lock { font-size: 11px; color: #9aa0a6; }
+.chrome-url .url-text { color: #e8eaed; }
+.chrome-toolbar-icons {
+  display: flex; align-items: center; gap: 6px;
+}
+.chrome-toolbar-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #9aa0a6; cursor: default;
+}
+/* Markup icon in toolbar */
+.chrome-markup-icon {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: var(--deep-blue); display: flex; align-items: center;
+  justify-content: center; cursor: default;
+  font-family: var(--font-disp); font-style: italic;
+  font-weight: 700; font-size: 13px; color: var(--gold);
+}
+
+.chrome-content {
+  flex: 1; display: flex; overflow: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAGE CONTENT (getmarkup.dev simplified)
+══════════════════════════════════════════════════════════════════════════ */
+.page {
+  flex: 1; background: var(--paper); display: flex; flex-direction: column;
+  overflow: hidden; position: relative;
+}
+.page-nav {
+  height: 56px; background: #fff;
+  border-bottom: 1px solid #eee;
+  display: flex; align-items: center; padding: 0 28px; gap: 0;
+  flex-shrink: 0; position: relative;
+}
+.page-nav-logo {
+  font-family: var(--font-disp); font-style: italic; font-weight: 700;
+  font-size: 20px; color: var(--deep-blue); margin-right: 32px;
+}
+.page-nav-links {
+  display: flex; gap: 28px; align-items: center; flex: 1;
+}
+.page-nav-links a {
+  font-size: 13px; color: var(--slate); text-decoration: none; font-weight: 500;
+}
+.page-nav-cta {
+  height: 34px; padding: 0 18px;
+  background: var(--deep-blue); color: var(--gold);
+  border-radius: 17px; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; letter-spacing: .03em;
+}
+
+/* hover ring on nav */
+.hover-ring-dashed {
+  position: absolute; inset: 0;
+  border: 2px dashed var(--gold);
+  pointer-events: none;
+}
+.hover-ring-solid {
+  position: absolute; inset: 0;
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 0 1px rgba(212,175,80,.3);
+  pointer-events: none;
+}
+
+.page-hero {
+  padding: 40px 28px 0;
+}
+.page-hero h1 {
+  font-size: 36px; font-weight: 700; color: var(--ink); line-height: 1.15;
+  margin-bottom: 6px;
+}
+.page-hero h1 span { color: var(--deep-blue); }
+.page-hero p {
+  font-size: 15px; color: var(--slate); margin-bottom: 20px; margin-top: 8px;
+}
+.page-chips {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px;
+}
+.page-chip {
+  height: 26px; padding: 0 12px; background: #f0ede6;
+  border-radius: 13px; font-size: 12px; color: var(--slate); font-weight: 500;
+  display: flex; align-items: center;
+}
+.page-cta {
+  height: 42px; padding: 0 22px; background: var(--deep-blue);
+  border-radius: 21px; font-size: 13px; font-weight: 700;
+  color: var(--gold); display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MARKUP SIDEBAR
+══════════════════════════════════════════════════════════════════════════ */
+.sidebar {
+  width: 340px; flex-shrink: 0;
+  background: var(--deep-blue);
+  display: flex; flex-direction: column;
+  border-left: 1px solid rgba(255,255,255,.06);
+  overflow: hidden;
+}
+
+/* Header */
+.sb-header {
+  height: 44px; background: #0e1530;
+  display: flex; align-items: center; padding: 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0;
+}
+.sb-title {
+  font-family: var(--font-disp); font-style: italic; font-weight: 700;
+  font-size: 17px; color: var(--gold); flex: 1;
+}
+.sb-note-count {
+  font-size: 11px; color: var(--slate); margin-right: 8px;
+}
+.mode-chip {
+  height: 22px; padding: 0 9px;
+  background: var(--mid-blue); border-radius: 11px;
+  font-size: 9px; font-weight: 700; color: #a8b4d0;
+  letter-spacing: .06em; display: flex; align-items: center;
+  border: none; cursor: pointer; margin-left: 8px;
+}
+.mode-chip--dev { background: rgba(212,175,80,.15); color: var(--gold); }
+.sb-icon-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: none;
+  background: transparent; color: var(--slate); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  margin-left: 4px;
+}
+.sb-icon-btn svg { width: 15px; height: 15px; }
+
+/* Session title */
+.sb-session {
+  padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,.05);
+  flex-shrink: 0;
+}
+.sb-session input {
+  width: 100%; background: transparent; border: none; outline: none;
+  font-family: var(--font-body); font-size: 12px; color: var(--slate);
+  caret-color: var(--gold);
+}
+.sb-session input::placeholder { color: rgba(110,118,140,.5); }
+
+/* Filter tabs */
+.sb-filter-tabs {
+  display: flex; border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0; background: #0e1530;
+}
+.sb-filter-tab {
+  flex: 1; height: 30px; font-size: 9px; font-weight: 700;
+  letter-spacing: .07em; color: var(--slate);
+  background: transparent; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.sb-filter-tab.active { color: var(--warm-white); border-bottom-color: var(--gold); }
+
+/* Notes area */
+.sb-notes {
+  flex: 1; overflow-y: auto; padding: 8px;
+}
+.sb-notes::-webkit-scrollbar { width: 4px; }
+.sb-notes::-webkit-scrollbar-track { background: transparent; }
+.sb-notes::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+/* Empty state */
+.sb-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 10px; padding: 40px;
+}
+.sb-empty svg { opacity: .2; }
+.sb-empty-title { font-size: 14px; color: var(--slate); font-weight: 600; }
+.sb-empty-sub   { font-size: 12px; color: rgba(110,118,140,.6); text-align: center; line-height: 1.4; }
+
+/* Note card */
+.note-card {
+  background: #1a2248; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.06);
+  margin-bottom: 6px; padding: 10px 10px 8px;
+}
+.note-card--high   { border-left: 2px solid #C2410C; }
+.note-card--medium { border-left: 2px solid #b09a14; }
+.note-card--low    { border-left: 2px solid var(--slate); }
+.note-card--critical { border-left: 2px solid #B91C1C; }
+
+.note-card__tags { display: flex; gap: 4px; margin-bottom: 6px; }
+.note-type-tag {
+  height: 18px; padding: 0 7px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  display: flex; align-items: center; color: #fff;
+}
+.note-type-tag--bug      { background: #991b1b; }
+.note-type-tag--design   { background: #1d4ed8; }
+.note-type-tag--copy     { background: #6b21a8; }
+.note-type-tag--question { background: #0f766e; }
+.note-type-tag--general  { background: var(--mid-blue); }
+
+.severity-badge {
+  height: 18px; padding: 0 7px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  display: flex; align-items: center; color: #fff;
+}
+.severity-badge--critical { background: #B91C1C; }
+.severity-badge--high     { background: #C2410C; }
+.severity-badge--medium   { background: #1A2744; color: #a0a8c0; border: 1px solid rgba(255,255,255,.1); }
+.severity-badge--low      { background: transparent; border: 1px solid var(--slate); color: var(--slate); }
+
+.note-card__text {
+  font-size: 12px; color: var(--warm-white); line-height: 1.45;
+  margin-bottom: 6px;
+}
+.note-card__selector {
+  font-family: var(--font-mono); font-size: 10px; color: var(--slate);
+}
+
+/* Note form */
+.sb-form { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.sb-form-label-row {
+  background: #1a2248; border-radius: 6px; padding: 7px 10px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--slate);
+  display: flex; align-items: center; gap: 6px;
+}
+.sb-form-label-row svg { width: 12px; height: 12px; opacity: .5; }
+.sb-textarea {
+  width: 100%; min-height: 80px; background: #1a2248;
+  border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+  padding: 10px; font-family: var(--font-body); font-size: 13px;
+  color: var(--warm-white); resize: none; outline: none;
+  caret-color: var(--gold); line-height: 1.45;
+}
+.sb-textarea::placeholder { color: rgba(110,118,140,.5); }
+.sb-type-row { display: flex; gap: 4px; }
+.type-btn {
+  flex: 1; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.08);
+  font-family: var(--font-body); font-size: 9px; font-weight: 700;
+  letter-spacing: .05em; cursor: pointer; color: var(--slate);
+  background: #1a2248;
+}
+.type-btn.active-bug      { background: #991b1b; color: #fff; border-color: #991b1b; }
+.type-btn.active-design   { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.type-btn.active-copy     { background: #6b21a8; color: #fff; border-color: #6b21a8; }
+.type-btn.active-question { background: #0f766e; color: #fff; border-color: #0f766e; }
+.type-btn.active-general  { background: var(--mid-blue); color: #fff; }
+
+.sb-sev-row { display: flex; gap: 4px; }
+.sev-btn {
+  flex: 1; height: 26px; border-radius: 6px; border: none;
+  font-family: var(--font-body); font-size: 9px; font-weight: 700;
+  letter-spacing: .04em; cursor: pointer; color: rgba(255,255,255,.5);
+  background: #1a2248;
+}
+.sev-btn.active-critical { background: #B91C1C; color: #fff; }
+.sev-btn.active-high     { background: #C2410C; color: #fff; }
+.sev-btn.active-medium   { background: #b09a14; color: #fff; }
+.sev-btn.active-low      { background: #3a5240; color: #a0c8a8; }
+
+.sb-save-row { display: flex; gap: 6px; margin-top: 2px; }
+.btn-save {
+  flex: 1; height: 34px; background: var(--gold); border: none; border-radius: 8px;
+  font-family: var(--font-body); font-size: 12px; font-weight: 700;
+  color: var(--deep-blue); cursor: pointer; letter-spacing: .04em;
+}
+.btn-cancel {
+  width: 80px; height: 34px; background: #1a2248; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px; font-family: var(--font-body); font-size: 12px;
+  color: var(--slate); cursor: pointer;
+}
+
+/* Bottom bar */
+.sb-bottom {
+  height: 52px; background: #0a1028;
+  border-top: 1px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; padding: 0 8px; gap: 6px;
+  flex-shrink: 0;
+}
+.bottom-btn {
+  flex: 1; height: 36px; background: var(--mid-blue);
+  border: none; border-radius: 7px;
+  font-family: var(--font-body); font-size: 9px; font-weight: 700;
+  letter-spacing: .05em; color: var(--warm-white); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  line-height: 1.2;
+}
+.bottom-btn.gold { background: var(--gold); color: var(--deep-blue); }
+.bottom-btn.dim  { opacity: .45; }
+
+/* Brief panel */
+.sb-brief {
+  flex: 1; overflow-y: auto; padding: 12px 10px;
+  font-size: 13px; color: var(--warm-white); line-height: 1.5;
+}
+.sb-brief::-webkit-scrollbar { width: 4px; }
+.sb-brief::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+.brief-logo {
+  font-family: var(--font-disp); font-style: italic; font-weight: 700;
+  font-size: 18px; color: var(--gold); margin-bottom: 2px;
+}
+.brief-meta {
+  font-size: 11px; color: var(--slate); margin-bottom: 10px;
+}
+.brief-sev-row {
+  display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.brief-sev-chip {
+  height: 20px; padding: 0 8px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  display: flex; align-items: center;
+}
+.brief-sev-chip--critical { background: #B91C1C; color: #fff; }
+.brief-sev-chip--high     { background: #C2410C; color: #fff; }
+.brief-sev-chip--medium   { background: #1A2744; color: #a0a8c0; border: 1px solid rgba(255,255,255,.1); }
+.brief-sev-chip--low      { background: transparent; border: 1px solid var(--slate); color: var(--slate); }
+
+.brief-hr { border: none; border-top: 1px solid rgba(255,255,255,.07); margin: 8px 0; }
+.brief-entry-card {
+  background: #1a2248; border-radius: 8px; padding: 10px;
+  margin-bottom: 8px; border: 1px solid rgba(255,255,255,.06);
+}
+.brief-entry-chips { display: flex; gap: 4px; margin-bottom: 6px; }
+.brief-sev-tag {
+  height: 18px; padding: 0 7px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  display: flex; align-items: center;
+}
+.brief-sev-tag--critical { background: #B91C1C; color: #fff; }
+.brief-sev-tag--high     { background: #C2410C; color: #fff; }
+.brief-sev-tag--medium   { background: #b09a14; color: #fff; }
+.brief-sev-tag--low      { background: transparent; border: 1px solid var(--slate); color: var(--slate); }
+.brief-type-tag {
+  height: 18px; padding: 0 7px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  display: flex; align-items: center; color: #fff;
+}
+.brief-type-tag--bug      { background: #991b1b; }
+.brief-type-tag--design   { background: #1d4ed8; }
+.brief-type-tag--copy     { background: #6b21a8; }
+.brief-type-tag--question { background: #0f766e; }
+.brief-selector {
+  font-family: var(--font-mono); font-size: 10px; color: var(--slate); margin-bottom: 4px;
+}
+.brief-note-text { font-size: 12px; color: var(--warm-white); line-height: 1.45; }
+
+/* Brief footer */
+.sb-brief-footer {
+  height: 52px; background: #0a1028;
+  border-top: 1px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; padding: 0 8px; gap: 6px;
+  flex-shrink: 0;
+}
+.btn-copy-brief {
+  height: 36px; padding: 0 18px; background: var(--gold); border: none;
+  border-radius: 8px; font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  color: var(--deep-blue); cursor: pointer; letter-spacing: .04em;
+}
+.btn-copy-brief.flash { background: #4ade80; color: #0a1028; }
+.btn-dl-pdf {
+  height: 36px; padding: 0 12px; background: var(--mid-blue); border: none;
+  border-radius: 8px; font-family: var(--font-body); font-size: 11px;
+  color: var(--warm-white); cursor: pointer;
+}
+
+/* Toast */
+.toast {
+  position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%);
+  background: #22c55e; color: #052e16; padding: 6px 16px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLAUDE UI (Scene 6)
+══════════════════════════════════════════════════════════════════════════ */
+.claude-page {
+  flex: 1; background: #f9f9fb; display: flex; overflow: hidden;
+}
+.claude-sidebar {
+  width: 224px; background: #ededf0; padding: 16px 12px;
+  border-right: 1px solid #dcdce0; flex-shrink: 0;
+}
+.claude-logo {
+  font-size: 15px; font-weight: 700; color: #4c3db0;
+  margin-bottom: 20px; display: flex; align-items: center; gap: 6px;
+}
+.claude-new-btn {
+  width: 100%; height: 32px; background: #fff;
+  border: 1px solid #dcdce0; border-radius: 8px;
+  font-size: 13px; color: #4a4a6a; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.claude-chat {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 0 0 16px;
+}
+.claude-chat-header {
+  padding: 20px 32px 12px;
+  font-size: 20px; font-weight: 700; color: #1a1a2e;
+}
+.claude-input-area {
+  margin: 0 28px; flex: 1;
+  background: #fff; border: 1px solid #dcdce0; border-radius: 14px;
+  padding: 16px 18px; overflow-y: auto;
+}
+.claude-paste {
+  font-size: 12px; line-height: 1.6; color: #2a2a4a;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+}
+.claude-paste .h1   { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; font-family: var(--font-body); }
+.claude-paste .meta { color: #6e6e8a; font-size: 11px; }
+.claude-paste .hr   { border: none; border-top: 1px solid #eee; margin: 8px 0; }
+.claude-paste .sev-high { color: #C2410C; font-weight: 700; }
+.claude-paste .sev-med  { color: #b09a14; font-weight: 700; }
+.claude-paste .sel      { color: #6b21a8; }
+.claude-paste .note-t   { color: #2a2a4a; }
+
+/* paste-highlight flash */
+.claude-input-area.just-pasted {
+  border-color: #4c3db0;
+  box-shadow: 0 0 0 3px rgba(76,61,176,.15);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CURSOR SVG
+══════════════════════════════════════════════════════════════════════════ */
+.cursor {
+  position: absolute; pointer-events: none; z-index: 100;
+  width: 20px; height: 24px;
+}
+</style>
+</head>
+<body>
+
+<div class="slides" id="slides">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 1 START — Chrome toolbar visible, no sidebar, cursor on Markup icon
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide active" id="s1a">
+  <div class="chrome">
+    <div class="chrome-titlebar">
+      <div class="chrome-tab">
+        <svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>
+        Markup – getmarkup.dev
+        <span class="chrome-tab-x">×</span>
+      </div>
+      <div class="chrome-inactive-tab">New Tab</div>
+    </div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div>
+      <div class="chrome-fwd" style="opacity:.3">›</div>
+      <div class="chrome-reload">↻</div>
+      <div class="chrome-url">
+        <span class="lock">🔒</span>
+        <span class="url-text">getmarkup.dev</span>
+      </div>
+      <div class="chrome-toolbar-icons">
+        <div class="chrome-toolbar-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </div>
+        <div class="chrome-toolbar-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </div>
+        <div class="chrome-markup-icon">M</div>
+      </div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links">
+            <a href="#">Features</a>
+            <a href="#">Docs</a>
+            <a href="#">Changelog</a>
+          </div>
+          <div class="page-nav-cta">Add to Chrome</div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production. Voice notes via Wispr Flow.</p>
+          <div class="page-chips">
+            <span class="page-chip">Works on localhost</span>
+            <span class="page-chip">Voice notes</span>
+            <span class="page-chip">Severity tags</span>
+            <span class="page-chip">AI brief</span>
+          </div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- cursor near Markup icon -->
+  <svg class="cursor" style="right:68px;top:50px" viewBox="0 0 20 24" fill="white" stroke="black" stroke-width="1.2">
+    <path d="M4 2 L4 20 L8 15 L12 22 L14 21 L10 14 L17 14 Z"/>
+  </svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 1 END — Sidebar open, empty state
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s1b">
+  <div class="chrome">
+    <div class="chrome-titlebar">
+      <div class="chrome-tab">
+        <svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>
+        Markup – getmarkup.dev
+        <span class="chrome-tab-x">×</span>
+      </div>
+    </div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div>
+      <div class="chrome-fwd" style="opacity:.3">›</div>
+      <div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons">
+        <div class="chrome-markup-icon">M</div>
+      </div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips">
+            <span class="page-chip">Works on localhost</span>
+            <span class="page-chip">Voice notes</span>
+            <span class="page-chip">AI brief</span>
+          </div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header">
+          <span class="sb-title">Markup</span>
+          <span class="sb-note-count">0 notes</span>
+          <button class="mode-chip">SIMPLE MODE</button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        </div>
+        <div class="sb-session"><input placeholder="Name this session…" /></div>
+        <div class="sb-notes">
+          <div class="sb-empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6e768c" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <div class="sb-empty-title">No notes yet</div>
+            <div class="sb-empty-sub">Click SCREENSHOT to capture the page,<br>or tap SELECT ELEMENT in Dev Mode.</div>
+          </div>
+        </div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 2 START — Dev Mode, cursor over page, no ring
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s2a">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header">
+          <span class="sb-title">Markup</span>
+          <span class="sb-note-count">0 notes</span>
+          <button class="mode-chip mode-chip--dev">DEV MODE</button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        </div>
+        <div class="sb-session"><input placeholder="Name this session…" /></div>
+        <div class="sb-filter-tabs">
+          <button class="sb-filter-tab active">ALL</button>
+          <button class="sb-filter-tab">CRIT</button>
+          <button class="sb-filter-tab">HIGH</button>
+          <button class="sb-filter-tab">MED</button>
+          <button class="sb-filter-tab">LOW</button>
+        </div>
+        <div class="sb-notes"><div class="sb-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6e768c" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div class="sb-empty-title">No notes yet</div>
+          <div class="sb-empty-sub">Hover over any element on the page,<br>then click to select it.</div>
+        </div></div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <svg class="cursor" style="left:360px;top:280px" viewBox="0 0 20 24" fill="white" stroke="black" stroke-width="1.2"><path d="M4 2 L4 20 L8 15 L12 22 L14 21 L10 14 L17 14 Z"/></svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 2 END — Dashed ring on nav bar
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s2b">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav" style="position:relative">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+          <div class="hover-ring-dashed"></div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header">
+          <span class="sb-title">Markup</span>
+          <span class="sb-note-count">0 notes</span>
+          <button class="mode-chip mode-chip--dev">DEV MODE</button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        </div>
+        <div class="sb-session"><input placeholder="Name this session…" /></div>
+        <div class="sb-filter-tabs">
+          <button class="sb-filter-tab active">ALL</button><button class="sb-filter-tab">CRIT</button><button class="sb-filter-tab">HIGH</button><button class="sb-filter-tab">MED</button><button class="sb-filter-tab">LOW</button>
+        </div>
+        <div class="sb-notes"><div class="sb-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6e768c" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div class="sb-empty-title">No notes yet</div>
+          <div class="sb-empty-sub">Hover over any element on the page,<br>then click to select it.</div>
+        </div></div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <svg class="cursor" style="left:230px;top:108px" viewBox="0 0 20 24" fill="white" stroke="black" stroke-width="1.2"><path d="M4 2 L4 20 L8 15 L12 22 L14 21 L10 14 L17 14 Z"/></svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 3 START — same as 2 end (dashed ring on nav)
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s3a">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav" style="position:relative">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+          <div class="hover-ring-dashed"></div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header"><span class="sb-title">Markup</span><span class="sb-note-count">0 notes</span><button class="mode-chip mode-chip--dev">DEV MODE</button></div>
+        <div class="sb-session"><input placeholder="Name this session…"/></div>
+        <div class="sb-filter-tabs"><button class="sb-filter-tab active">ALL</button><button class="sb-filter-tab">CRIT</button><button class="sb-filter-tab">HIGH</button><button class="sb-filter-tab">MED</button><button class="sb-filter-tab">LOW</button></div>
+        <div class="sb-notes"><div class="sb-empty"><div class="sb-empty-title">No notes yet</div><div class="sb-empty-sub">Hover, then click to select.</div></div></div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <svg class="cursor" style="left:230px;top:108px" viewBox="0 0 20 24" fill="white" stroke="black" stroke-width="1.2"><path d="M4 2 L4 20 L8 15 L12 22 L14 21 L10 14 L17 14 Z"/></svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 3 END — Solid ring on nav, note form open in sidebar
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s3b">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav" style="position:relative">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+          <div class="hover-ring-solid"></div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header"><span class="sb-title">Markup</span><span class="sb-note-count">0 notes</span><button class="mode-chip mode-chip--dev">DEV MODE</button></div>
+        <div class="sb-form">
+          <div class="sb-form-label-row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            nav · navigation
+          </div>
+          <textarea class="sb-textarea" placeholder="Describe the issue… or speak via Wispr Flow" style="border-color:rgba(212,175,80,.4);"></textarea>
+          <div class="sb-type-row">
+            <button class="type-btn active-bug">BUG</button>
+            <button class="type-btn">DESIGN</button>
+            <button class="type-btn">COPY</button>
+            <button class="type-btn">QUESTION</button>
+            <button class="type-btn">GENERAL</button>
+          </div>
+          <div class="sb-sev-row">
+            <button class="sev-btn">CRITICAL</button>
+            <button class="sev-btn active-high">HIGH</button>
+            <button class="sev-btn">MEDIUM</button>
+            <button class="sev-btn">LOW</button>
+          </div>
+          <div class="sb-save-row">
+            <button class="btn-save">SAVE</button>
+            <button class="btn-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 4 START — Form with text being typed
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s4a">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav" style="position:relative">
+          <div class="page-nav-logo">Markup</div>
+          <div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div>
+          <div class="page-nav-cta">Add to Chrome</div>
+          <div class="hover-ring-solid"></div>
+        </div>
+        <div class="page-hero">
+          <h1>Annotate any page.<br>Generate a fix brief.</h1>
+          <p>Works on localhost, staging, or production.</p>
+          <div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div>
+          <a class="page-cta" href="#">Add to Chrome — Free</a>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header"><span class="sb-title">Markup</span><span class="sb-note-count">0 notes</span><button class="mode-chip mode-chip--dev">DEV MODE</button></div>
+        <div class="sb-form">
+          <div class="sb-form-label-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>nav · navigation</div>
+          <textarea class="sb-textarea" style="border-color:rgba(212,175,80,.4);">Nav link color is too light on mobile — fails contrast check▌</textarea>
+          <div class="sb-type-row">
+            <button class="type-btn active-bug">BUG</button>
+            <button class="type-btn">DESIGN</button>
+            <button class="type-btn">COPY</button>
+            <button class="type-btn">QUESTION</button>
+            <button class="type-btn">GENERAL</button>
+          </div>
+          <div class="sb-sev-row">
+            <button class="sev-btn">CRITICAL</button>
+            <button class="sev-btn active-high">HIGH</button>
+            <button class="sev-btn">MEDIUM</button>
+            <button class="sev-btn">LOW</button>
+          </div>
+          <div class="sb-save-row">
+            <button class="btn-save">SAVE</button>
+            <button class="btn-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn dim">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 4 END — Two note cards saved
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s4b">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav"><div class="page-nav-logo">Markup</div><div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div><div class="page-nav-cta">Add to Chrome</div></div>
+        <div class="page-hero"><h1>Annotate any page.<br>Generate a fix brief.</h1><p>Works on localhost, staging, or production.</p><div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div><a class="page-cta" href="#">Add to Chrome — Free</a></div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header"><span class="sb-title">Markup</span><span class="sb-note-count">2 notes</span><button class="mode-chip mode-chip--dev">DEV MODE</button></div>
+        <div class="sb-session"><input value="Homepage review" /></div>
+        <div class="sb-filter-tabs"><button class="sb-filter-tab active">ALL</button><button class="sb-filter-tab">CRIT</button><button class="sb-filter-tab">HIGH</button><button class="sb-filter-tab">MED</button><button class="sb-filter-tab">LOW</button></div>
+        <div class="sb-notes">
+          <div class="note-card note-card--high">
+            <div class="note-card__tags">
+              <span class="note-type-tag note-type-tag--bug">BUG</span>
+              <span class="severity-badge severity-badge--high">HIGH</span>
+            </div>
+            <div class="note-card__text">Nav link color is too light on mobile — fails contrast check</div>
+            <div class="note-card__selector">nav.main-nav</div>
+          </div>
+          <div class="note-card note-card--medium">
+            <div class="note-card__tags">
+              <span class="note-type-tag note-type-tag--design">DESIGN</span>
+              <span class="severity-badge severity-badge--medium">MEDIUM</span>
+            </div>
+            <div class="note-card__text">Headline font drops too aggressively at 375px viewport width</div>
+            <div class="note-card__selector">.hero-headline</div>
+          </div>
+        </div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 5 START — 3 notes, GENERATE BRIEF highlighted gold
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s5a">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav"><div class="page-nav-logo">Markup</div><div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div><div class="page-nav-cta">Add to Chrome</div></div>
+        <div class="page-hero"><h1>Annotate any page.<br>Generate a fix brief.</h1><p>Works on localhost, staging, or production.</p><div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div><a class="page-cta" href="#">Add to Chrome — Free</a></div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header"><span class="sb-title">Markup</span><span class="sb-note-count">3 notes</span><button class="mode-chip mode-chip--dev">DEV MODE</button></div>
+        <div class="sb-session"><input value="Homepage review" /></div>
+        <div class="sb-filter-tabs"><button class="sb-filter-tab active">ALL</button><button class="sb-filter-tab">CRIT</button><button class="sb-filter-tab">HIGH</button><button class="sb-filter-tab">MED</button><button class="sb-filter-tab">LOW</button></div>
+        <div class="sb-notes">
+          <div class="note-card note-card--high">
+            <div class="note-card__tags"><span class="note-type-tag note-type-tag--bug">BUG</span><span class="severity-badge severity-badge--high">HIGH</span></div>
+            <div class="note-card__text">Nav link color is too light on mobile — fails contrast check</div>
+            <div class="note-card__selector">nav.main-nav</div>
+          </div>
+          <div class="note-card note-card--medium">
+            <div class="note-card__tags"><span class="note-type-tag note-type-tag--design">DESIGN</span><span class="severity-badge severity-badge--medium">MEDIUM</span></div>
+            <div class="note-card__text">Headline font drops too aggressively at 375px viewport width</div>
+            <div class="note-card__selector">.hero-headline</div>
+          </div>
+          <div class="note-card note-card--low">
+            <div class="note-card__tags"><span class="note-type-tag note-type-tag--copy">COPY</span><span class="severity-badge severity-badge--low">LOW</span></div>
+            <div class="note-card__text">CTA copy too generic — test "Start annotating free"</div>
+            <div class="note-card__selector">.cta-button</div>
+          </div>
+        </div>
+        <div class="sb-bottom">
+          <button class="bottom-btn">SELECT<br>ELEMENT</button>
+          <button class="bottom-btn">SCREENSHOT</button>
+          <button class="bottom-btn gold">GENERATE<br>BRIEF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <svg class="cursor" style="right:60px;bottom:30px" viewBox="0 0 20 24" fill="white" stroke="black" stroke-width="1.2"><path d="M4 2 L4 20 L8 15 L12 22 L14 21 L10 14 L17 14 Z"/></svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 5 END — Brief panel fully rendered
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s5b">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav"><div class="page-nav-logo">Markup</div><div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div><div class="page-nav-cta">Add to Chrome</div></div>
+        <div class="page-hero"><h1>Annotate any page.<br>Generate a fix brief.</h1><p>Works on localhost, staging, or production.</p><div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div><a class="page-cta" href="#">Add to Chrome — Free</a></div>
+      </div>
+      <div class="sidebar">
+        <div class="sb-header">
+          <span style="font-size:11px;color:var(--slate);cursor:pointer;margin-right:8px;">← Notes</span>
+          <span class="sb-title" style="font-size:15px;">Brief</span>
+          <span style="flex:1"></span>
+          <button class="sb-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        </div>
+        <div class="sb-brief">
+          <div class="brief-logo">Markup</div>
+          <div class="brief-meta">getmarkup.dev · 3 notes · Homepage review</div>
+          <div class="brief-sev-row">
+            <span class="brief-sev-chip brief-sev-chip--high">1 HIGH</span>
+            <span class="brief-sev-chip brief-sev-chip--medium">1 MEDIUM</span>
+            <span class="brief-sev-chip brief-sev-chip--low">1 LOW</span>
+          </div>
+          <hr class="brief-hr">
+          <div class="brief-entry-card">
+            <div class="brief-entry-chips">
+              <span class="brief-sev-tag brief-sev-tag--high">HIGH</span>
+              <span class="brief-type-tag brief-type-tag--bug">BUG</span>
+            </div>
+            <div class="brief-selector">nav.main-nav</div>
+            <div class="brief-note-text">Nav link color is too light on mobile — fails contrast check. Verify WCAG AA (4.5:1) at 375px.</div>
+          </div>
+          <div class="brief-entry-card">
+            <div class="brief-entry-chips">
+              <span class="brief-sev-tag brief-sev-tag--medium">MEDIUM</span>
+              <span class="brief-type-tag brief-type-tag--design">DESIGN</span>
+            </div>
+            <div class="brief-selector">.hero-headline</div>
+            <div class="brief-note-text">Headline font drops too aggressively at 375px. Consider clamp() for fluid sizing.</div>
+          </div>
+          <div class="brief-entry-card">
+            <div class="brief-entry-chips">
+              <span class="brief-sev-tag brief-sev-tag--low">LOW</span>
+              <span class="brief-type-tag brief-type-tag--copy">COPY</span>
+            </div>
+            <div class="brief-selector">.cta-button</div>
+            <div class="brief-note-text">CTA copy too generic. Test "Start annotating free" vs current.</div>
+          </div>
+        </div>
+        <div class="sb-brief-footer">
+          <button class="btn-copy-brief">COPY</button>
+          <button class="btn-dl-pdf">Download PDF</button>
+          <button class="btn-dl-pdf">ZIP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 6 START — Brief panel, COPY button, toast visible
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s6a">
+  <div class="chrome">
+    <div class="chrome-titlebar"><div class="chrome-tab"><svg viewBox="0 0 16 16" fill="none"><rect width="16" height="16" rx="3" fill="#121a3a"/><text x="4" y="12" font-family="Georgia" font-style="italic" font-size="9" fill="#d4af50">M</text></svg>Markup – getmarkup.dev<span class="chrome-tab-x">×</span></div></div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">getmarkup.dev</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="page">
+        <div class="page-nav"><div class="page-nav-logo">Markup</div><div class="page-nav-links"><a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a></div><div class="page-nav-cta">Add to Chrome</div></div>
+        <div class="page-hero"><h1>Annotate any page.<br>Generate a fix brief.</h1><p>Works on localhost, staging, or production.</p><div class="page-chips"><span class="page-chip">Works on localhost</span><span class="page-chip">Voice notes</span><span class="page-chip">AI brief</span></div><a class="page-cta" href="#">Add to Chrome — Free</a></div>
+      </div>
+      <div class="sidebar" style="position:relative">
+        <div class="sb-header"><span style="font-size:11px;color:var(--slate);margin-right:8px;">← Notes</span><span class="sb-title" style="font-size:15px;">Brief</span></div>
+        <div class="sb-brief">
+          <div class="brief-logo">Markup</div>
+          <div class="brief-meta">getmarkup.dev · 3 notes · Homepage review</div>
+          <div class="brief-sev-row">
+            <span class="brief-sev-chip brief-sev-chip--high">1 HIGH</span>
+            <span class="brief-sev-chip brief-sev-chip--medium">1 MEDIUM</span>
+            <span class="brief-sev-chip brief-sev-chip--low">1 LOW</span>
+          </div>
+          <hr class="brief-hr">
+          <div class="brief-entry-card">
+            <div class="brief-entry-chips"><span class="brief-sev-tag brief-sev-tag--high">HIGH</span><span class="brief-type-tag brief-type-tag--bug">BUG</span></div>
+            <div class="brief-selector">nav.main-nav</div>
+            <div class="brief-note-text">Nav link color is too light on mobile — fails contrast check.</div>
+          </div>
+          <div class="brief-entry-card">
+            <div class="brief-entry-chips"><span class="brief-sev-tag brief-sev-tag--medium">MEDIUM</span><span class="brief-type-tag brief-type-tag--design">DESIGN</span></div>
+            <div class="brief-selector">.hero-headline</div>
+            <div class="brief-note-text">Headline font drops too aggressively at 375px.</div>
+          </div>
+        </div>
+        <div class="sb-brief-footer">
+          <button class="btn-copy-brief flash">✓ COPIED</button>
+          <button class="btn-dl-pdf">Download PDF</button>
+          <button class="btn-dl-pdf">ZIP</button>
+        </div>
+        <div class="toast">Copied to clipboard</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+  SCENE 6 END — Claude.ai with brief pasted
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s6b">
+  <div class="chrome">
+    <div class="chrome-titlebar">
+      <div class="chrome-inactive-tab" style="background:transparent;color:#9aa0a6;margin-bottom:2px;font-size:12px;padding:0 12px;">Markup – getmarkup.dev</div>
+      <div class="chrome-tab" style="background:#202124">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="8" fill="#6b48ff"/><text x="4" y="12" font-family="Georgia" font-size="8" fill="white">C</text></svg>
+        Claude – claude.ai
+        <span class="chrome-tab-x">×</span>
+      </div>
+    </div>
+    <div class="chrome-addressbar">
+      <div class="chrome-back">‹</div><div class="chrome-fwd" style="opacity:.3">›</div><div class="chrome-reload">↻</div>
+      <div class="chrome-url"><span class="lock">🔒</span><span class="url-text">claude.ai/new</span></div>
+      <div class="chrome-toolbar-icons"><div class="chrome-markup-icon">M</div></div>
+    </div>
+    <div class="chrome-content">
+      <div class="claude-page">
+        <div class="claude-sidebar">
+          <div class="claude-logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#6b48ff"><circle cx="12" cy="12" r="10"/><text x="7" y="17" font-family="Georgia" font-size="12" fill="white">C</text></svg>
+            Claude
+          </div>
+          <button class="claude-new-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New conversation
+          </button>
+          <div style="margin-top:16px;font-size:12px;color:#9898b0;padding:4px 8px;">Today</div>
+          <div style="font-size:12px;color:#4a4a6a;padding:6px 8px;border-radius:6px;background:#dddde8;margin-top:2px;">Homepage review brief</div>
+        </div>
+        <div class="claude-chat">
+          <div class="claude-chat-header">New conversation</div>
+          <div class="claude-input-area just-pasted">
+            <div class="claude-paste">
+<span class="h1"># Markup Brief — getmarkup.dev</span>
+<span class="meta">Session: Homepage review · 3 notes</span>
+<div class="hr"></div>
+<span class="meta">Summary: 1 High · 1 Medium · 1 Low</span>
+<div class="hr"></div>
+
+<span class="sev-high">## HIGH — BUG</span>
+<span class="sel">Selector: nav.main-nav</span>
+<span class="note-t">Nav link color is too light on mobile — fails WCAG AA contrast check at 375px viewport. Verify 4.5:1 ratio.</span>
+
+<span class="sev-med">## MEDIUM — DESIGN</span>
+<span class="sel">Selector: .hero-headline</span>
+<span class="note-t">Headline font size drops too aggressively at 375px. Consider fluid typography with clamp().</span>
+
+<span style="color:#6e768c">## LOW — COPY</span>
+<span class="sel">Selector: .cta-button</span>
+<span class="note-t">CTA copy too generic. A/B test "Start annotating free" vs current "Add to Chrome — Free".</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /slides -->
+
+<!-- Navigation -->
+<div class="nav">
+  <button onclick="prev()">← Prev</button>
+  <span class="label" id="label">Scene 1 Start — Sidebar closed</span>
+  <button onclick="next()">Next →</button>
+</div>
+
+<script>
+const scenes = [
+  {id:'s1a', label:'Scene 1 Start — Sidebar closed'},
+  {id:'s1b', label:'Scene 1 End — Sidebar open, empty'},
+  {id:'s2a', label:'Scene 2 Start — Dev Mode, no ring'},
+  {id:'s2b', label:'Scene 2 End — Dashed ring on nav'},
+  {id:'s3a', label:'Scene 3 Start — Dashed ring (same as 2 end)'},
+  {id:'s3b', label:'Scene 3 End — Solid ring, form open'},
+  {id:'s4a', label:'Scene 4 Start — Note being typed'},
+  {id:'s4b', label:'Scene 4 End — Two notes saved'},
+  {id:'s5a', label:'Scene 5 Start — 3 notes, Generate Brief highlighted'},
+  {id:'s5b', label:'Scene 5 End — Brief panel loaded'},
+  {id:'s6a', label:'Scene 6 Start — Copy clicked, toast'},
+  {id:'s6b', label:'Scene 6 End — Pasted into Claude'},
+];
+let cur = 0;
+function show(i) {
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.getElementById(scenes[i].id).classList.add('active');
+  document.getElementById('label').textContent = `${i+1}/12 — ${scenes[i].label}`;
+}
+function next() { cur = Math.min(cur+1, scenes.length-1); show(cur); }
+function prev() { cur = Math.max(cur-1, 0); show(cur); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next();
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prev();
+});
+show(0);
+</script>
+</body>
+</html>

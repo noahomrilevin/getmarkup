@@ -1,10 +1,16 @@
 # Markup — Claude Context
 
+## Sprint Convention
+
+**`SPRINT.md`** in the project root is the ONE active sprint file. Always read it first.
+**`sprints/`** directory contains archived completed sprints.
+When done with a sprint: append "## What Shipped" to SPRINT.md, move it to `sprints/`, write a new SPRINT.md.
+
 ## Project
 
 Chrome extension for annotating web pages. Side panel UI, content script selection, Wispr Flow voice notes, brief generation, screenshot capture.
 
-**Current Sprint:** Sprint 11 Complete (Pass 23 done) — Pre-launch
+**Current Sprint:** v0.9.2 — Submitted to Chrome Web Store. Awaiting review. See `SPRINT.md` for active work.
 
 ---
 
@@ -206,39 +212,30 @@ The gap nobody has filled: Chrome extension that works on localhost, captures el
 ### Pre-Launch Checklist
 
 **Extension**
-- [ ] Extension icon — 128×128 PNG + 16/32/48px set, gold/blue M, matches brand tokens
-- [ ] No console errors on clean load
-- [ ] Tested on localhost, file://, and live https://
-- [ ] Node version pinned in `.nvmrc`
+- [x] Extension icon — 128×128 PNG + 16/32/48px set
+- [x] No console errors on clean load
+- [x] Tested on localhost, file://, and live https://
 
 **Repository**
-- [ ] README: what it is, load-unpacked install instructions, GIF demo, MIT license
-- [ ] LICENSE file present (MIT)
-- [ ] CHANGELOG.md has v1.0.0 entry
-- [ ] CONTRIBUTING.md exists
-- [ ] GitHub repo is public
+- [x] README written with install instructions
+- [x] CHANGELOG.md maintained
+- [x] GitHub repo: github.com/noahomrilevin/getmarkup
 
 **Chrome Web Store**
-- [ ] Short description (132 chars): `Annotate any page on localhost or live. Generate an AI fix brief. Paste into Claude, Cursor, or Copilot.`
-- [ ] Long description (~500 words)
-- [ ] 5 screenshots at 1280×800: (1) sidebar with notes, (2) brief generated, (3) brief pasted into Claude, (4) element selection ring on real page, (5) settings/archive panel
-- [ ] Privacy policy live at getmarkup.dev/privacy
-- [ ] Category: Productivity. Keywords: annotation, review, AI, developer, feedback
-- [ ] Publisher account verified
+- [x] Submitted for review (v0.9.2)
+- [x] Privacy policy live at getmarkup.dev/privacy
+- [ ] **WAITING:** Chrome Web Store approval
 
 **Site (getmarkup.dev)**
-- [ ] Landing page live — see `reviewbrief/05-ship/landing-page-plan.md` for full spec
-- [ ] `/privacy` page live (required for store submission)
-- [ ] Open Graph image (1200×630)
-- [ ] "Add to Chrome" CTA links to live store listing
+- [x] Landing page live at getmarkup.dev
+- [x] `/privacy` page live
+- [x] OG image (og-image.png)
 
-**Demo + Distribution**
-- [ ] Demo GIF — 60 seconds: open sidebar → select element → voice note → generate brief → copy. This is the critical path blocker for the landing page hero.
-- [ ] Twitter thread written
-- [ ] LinkedIn post written
-- [ ] Hacker News "Show HN" post drafted
-- [ ] Product Hunt listing prepared (midnight PT submission)
-- [ ] Substack launch article written (personal story angle: built with one arm + Wispr Flow)
+**Pre-Launch Assets (do while waiting for approval)**
+- [ ] Demo video — core loop: open sidebar → select element → voice note → generate brief → copy
+- [ ] Upscale/polish store screenshots to production quality
+- [ ] Product Hunt listing drafted (submit within 2–4 weeks of store go-live)
+- [ ] Launch posts drafted: Twitter thread, LinkedIn, Hacker News "Show HN", Substack
 
 ### Launch Day Runbook
 

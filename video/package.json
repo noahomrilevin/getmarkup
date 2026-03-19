@@ -1,0 +1,26 @@
+{
+  "name": "video",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npx remotion studio src/index.ts",
+    "build": "npx remotion render src/index.ts MarkupPromo out/markup-promo.mp4",
+    "build:scene": "npx remotion render src/index.ts",
+    "preview": "npx remotion preview src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@remotion/cli": "^4.0.436",
+    "@remotion/transitions": "^4.0.436",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.436",
+    "typescript": "^5.9.3"
+  }
+}
