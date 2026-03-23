@@ -2,9 +2,11 @@
 
 Annotate any web page and generate structured AI fix briefs. A Chrome extension for developers, designers, and anyone who reviews live products.
 
-<a href="https://www.youtube.com/watch?v=q7PvjqEucoc">
-  <img src="https://img.youtube.com/vi/q7PvjqEucoc/maxresdefault.jpg" alt="Markup — Launch Video" width="100%">
-</a>
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=q7PvjqEucoc">
+    <img src="docs/video-thumb.jpg" alt="Watch Markup launch video" width="100%">
+  </a>
+</p>
 
 ---
 
